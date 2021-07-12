@@ -1,0 +1,350 @@
+<?php
+
+/**
+ * Originally from https://github.com/mlocati/ocsp
+ * Changed namespaces so there are no clashes with the orginal project
+ */
+
+namespace lyquidity\Asn1\Der;
+
+use DateTime;
+use DateTimeImmutable;
+use DateTimeZone;
+use lyquidity\Asn1\Element;
+use lyquidity\Asn1\Element\UTCTime;
+use lyquidity\Asn1\Util\BigInteger;
+use lyquidity\Asn1\Encoder as EncoderInterface;
+use lyquidity\Asn1\Tag;
+use lyquidity\Asn1\TaggableElement;
+use \lyquidity\Asn1\Exception\Asn1EncodingException;
+
+/**
+ * Encoder from ASN.1 to DER.
+ */
+class Encoder implements EncoderInterface
+{
+    /**
+     * {@inheritdoc}
+     *
+     * @see \lyquidity\Asn1\Encoder::getEncodingHandle()
+     */
+    public function getEncodingHandle()
+    {
+        return 'der';
+    }
+
+    /**
+     * {@inheritdoc}
+     *
+     * @see \lyquidity\Asn1\Encoder::encodeElement()
+     */
+    public function encodeElement(Element $element)
+    {
+        $tag = null;
+        if ($element instanceof TaggableElement) {
+            $tag = $element->getTag();
+        }
+        if ($tag === null) {
+            return $this->doEncodeElement($element);
+        }
+        switch ($tag->getEnvironment()) {
+            case Tag::ENVIRONMENT_EXPLICIT:
+                $elementBytes = $this->doEncodeElement($element);
+
+                return $this->encodeType($tag->getTagID(), $tag->getClass(), true) . $this->encodeLength($elementBytes) . $elementBytes;
+            case Tag::ENVIRONMENT_IMPLICIT:
+                return $this->doEncodeElement($element, $tag);
+            default:
+                throw Asn1EncodingException::create(sprintf('Invalid ASN.1 tag environment: %s', $tag->getEnvironment()));
+        }
+    }
+
+    /**
+     * {@inheritdoc}
+     *
+     * @see \lyquidity\Asn1\Encoder::encodeInteger()
+     */
+    public function encodeInteger($value)
+    {
+        if ( ! $value instanceof BigInteger )
+        {
+            $value = new BigInteger( \gmp_init( $value ) );
+        }
+
+        return $value->unsignedOctets();
+    }
+
+    /**
+     * {@inheritdoc}
+     *
+     * @see \lyquidity\Asn1\Encoder::encodeIdentifier()
+     */
+    public function encodeIdentifier($value)
+    {
+        $parts = explode('.', $value);
+        $result = chr((int) array_shift($parts) * 40 + (int) array_shift($parts));
+        while (($part = array_shift($parts)) !== null) {
+            $result .= $this->encodeIdentifierPart($part);
+        }
+
+        return $result;
+    }
+
+    /**
+     * {@inheritdoc}
+     *
+     * @see \lyquidity\Asn1\Encoder::encodeOctetString()
+     */
+    public function encodeOctetString($value)
+    {
+        return $value;
+    }
+
+    /**
+     * {@inheritdoc}
+     *
+     * @see \lyquidity\Asn1\Encoder::encodePrintableString()
+     */
+    public function encodePrintableString($value)
+    {
+        return $value;
+    }
+
+    /**
+     * {@inheritdoc}
+     *
+     * @see \lyquidity\Asn1\Encoder::encodeBitString()
+     */
+    public function encodeBitString($bytes, $unusedBitsInLastByte)
+    {
+        return chr($unusedBitsInLastByte) . $bytes;
+    }
+
+    /**
+     * {@inheritdoc}
+     *
+     * @see \lyquidity\Asn1\Encoder::encodeGeneralizedTime()
+     */
+    public function encodeGeneralizedTime( $value )
+    {
+        $datetime = new DateTime('now', new DateTimeZone('UTC'));
+        $datetime->setTimestamp($value->getTimestamp());
+
+        $result = $datetime->format('YmdHis');
+        $useconds = ltrim($value->format('u'), '0');
+        if ($useconds !== '') {
+            $result .= '.' . $useconds;
+        }
+        $result .= 'Z';
+
+        return $result;
+    }
+
+    /**
+     * {@inheritdoc}
+     *
+     * @see \lyquidity\Asn1\Encoder::encodeGeneralizedTime()
+     */
+    public function encodeUTCTime( $value )
+    {
+        /** @var \DateTimeImmutable $value */
+        $dt = $value->setTimezone( UTCTime::createTimeZone( UTCTime::TZ_UTC ) );
+        return $dt->format('ymdHis\\Z');
+    }
+
+    /**
+     * Encode the value of a BOOLEAN element.
+     *
+     * @param bool $value
+     *
+     * @return string
+     */
+    public function encodeBoolean( $value )
+    {
+        return $value
+            ? chr( 0xFF )
+            : chr( 0x00 );
+    }
+
+    /**
+     * Encode the value of a NULL element.
+     *
+     * @return string
+     */
+    public function encodeNull()
+    {
+        return null;
+    }
+
+    /**
+     * @param \lyquidity\Asn1\Element $element
+     * @param \lyquidity\Asn1\Tag $implicitTag
+     *
+     * @throws \lyquidity\Asn1\Exception\Asn1EncodingException when the element or the tag are defined in invalid classes
+     *
+     * @return string
+     */
+    protected function doEncodeElement(Element $element, Tag $implicitTag = null)
+    {
+        if ($implicitTag === null) {
+            $result = $this->encodeType($element->getTypeID(), $element->getClass(), $element->isConstructed());
+        } else {
+            $result = $this->encodeType($implicitTag->getTagID(), $implicitTag->getClass(), is_null( $implicitTag->isConstructed() ) ? $element->isConstructed() : $implicitTag->isConstructed() );
+        }
+        $elementBytes = $element->getEncodedValue($this);
+
+        return $result . $this->encodeLength($elementBytes) . $elementBytes;
+    }
+
+    /**
+     * Encode a part of the value of an IDENTIFIER element.
+     *
+     * @param string $part
+     *
+     * @return string
+     */
+    protected function encodeIdentifierPart($part)
+    {
+        $part = ltrim($part, '0');
+        if ($part === '') {
+            return "\x00";
+        }
+        $bytes = [];
+        if (strlen($part) < strlen(PHP_INT_MAX)) {
+            $int = (int) $part;
+            if ($int <= 127) {
+                return chr($int);
+            }
+            $bits = decbin($int);
+        } else {
+            $bits = (new BigInteger($part))->unsignedOctets();
+        }
+        do {
+            array_unshift($bytes, bindec(substr($bits, -7)));
+            $bits = substr($bits, 0, -7);
+        } while ($bits !== '' && $bits !== false);
+        $result = '';
+        foreach (array_splice($bytes, 0, -1) as $byte) {
+            $result .= chr(0x80 | $byte);
+        }
+        $result .= chr(reset($bytes));
+
+        return $result;
+    }
+
+    /**
+     * Encode the value of a ENUMERATED element.
+     *
+     * @param int $value
+     *
+     * @return string
+     */
+    public function encodeEnumerated( $value)
+    {
+        return pack( 'C*', $value );
+    }
+
+    /**
+     * Encode the type ID.
+     *
+     * @param int|string|\phpseclib\Math\BigInteger $typeID the type ID
+     * @param string $class the class (the value of one of the Element::CLASS_... constants)
+     * @param bool $isConstructed is the element a constructed element?
+     *
+     * @throws \lyquidity\Asn1\Exception\Asn1EncodingException when $class contains an invalid value
+     *
+     * @return string
+     */
+    protected function encodeType($typeID, $class, $isConstructed)
+    {
+        switch ($class) {
+            case Element::CLASS_UNIVERSAL:
+                $firstByte = 0b00000000;
+                break;
+            case Element::CLASS_APPLICATION:
+                $firstByte = 0b01000000;
+                break;
+            case Element::CLASS_CONTEXTSPECIFIC:
+                $firstByte = 0b10000000;
+                break;
+            case Element::CLASS_PRIVATE:
+                $firstByte = 0b11000000;
+                break;
+            default:
+                throw Asn1EncodingException::create(sprintf('Invalid ASN.1 class: %s', $class));
+        }
+        if ($isConstructed) {
+            $firstByte |= 0b00100000;
+        }
+        $typeIDBits = $this->getBits($typeID);
+        if (!isset($typeIDBits[5])) {
+            $typeIDInt = bindec($typeIDBits);
+            if ($typeIDInt <= 30) {
+                return chr($firstByte | $typeIDInt);
+            }
+        }
+        $result = chr($firstByte | 0b00011111);
+        while (isset($typeIDBits[7])) {
+            $result .= chr(bindec('1' . substr($typeIDBits, -7)));
+            $typeIDBits = substr($typeIDBits, 0, -7);
+        }
+        $result .= chr(bindec($typeIDBits));
+
+        return $result;
+    }
+
+    /**
+     * Encode the length of the encoded value of an element.
+     *
+     * @param string $encodedElementValue the encoded value of an element
+     *
+     * @return string
+     */
+    protected function encodeLength($encodedElementValue)
+    {
+        $length = strlen($encodedElementValue);
+        if ($length < 127) {
+            return chr($length);
+        }
+        $lengthHex = dechex($length);
+        $lengthHexLength = strlen($lengthHex);
+        if (($lengthHexLength % 2) !== 0) {
+            $lengthHex = '0' . $lengthHex;
+            ++$lengthHexLength;
+        }
+        $lengthNumBytes = strlen($lengthHex) >> 1;
+        $result = chr($lengthNumBytes | 0x80);
+        for ($index = 0; $index < $lengthHexLength; $index += 2) {
+            $result .= chr(hexdec($lengthHex[$index] . $lengthHex[$index + 1]));
+        }
+
+        return $result;
+    }
+
+    /**
+     * Get the bits representing a number.
+     *
+     * @param int|string|\phpseclib\Math\BigInteger $number
+     *
+     * @return string
+     */
+    protected function getBits($number)
+    {
+        if (is_int($number)) {
+            return decbin($number);
+        }
+        if (is_string($number)) {
+            $number = ltrim($number, '0');
+            if ($number === '') {
+                return '0';
+            }
+            if (strlen($number) < strlen((string) PHP_INT_MAX)) {
+                return decbin((int) $number);
+            }
+            $number = new BigInteger($number);
+        }
+
+        return $number->unsignedOctets();
+    }
+
+}

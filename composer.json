@@ -1,0 +1,48 @@
+{
+    "name": "lyquidity/requester",
+    "description": "Library to query HTTPS Certificates revocation status using the Online Certificate Status Protocol (OCSP) and to make a request to a Timestamp authority (TSA)",
+    "license": "MIT",
+    "type": "library",
+    "authors": [
+        {
+            "name": "Bill Seddon",
+            "email": "bill.seddon@lyquidity.com",
+            "homepage" : "https://www.xbrlquery.com",
+            "role" : "Author"
+        }
+    ],
+    "homepage": "https://github.com/bseddon/requester/",
+    "support": {
+	    "issues": "https://github.com/bseddon/requester/issues/",
+	    "source": "https://github.com/bseddon/requester/"
+    },
+    "minimum-stability": "stable",
+    "config": {
+        "sort-packages": true,
+        "optimize-autoloader": true
+    },
+	"autoload": { 
+		"files": ["./src/autoload.php"] 
+	},
+    "require": {
+        "php": ">=5.5.9",
+		"ext-gmp": ">=3.0.0"
+    },
+    "keywords": [
+        "ocsp",
+		"request",
+		"rfc6069",
+        "certificate",
+        "https",
+        "revoke",
+        "revocation",
+        "revoked",
+        "online certificate status protocol",
+        "check",
+        "security",
+        "timestamp",
+        "timestamp authority",
+        "tsa",
+        "rfc3161"
+    ]
+}
