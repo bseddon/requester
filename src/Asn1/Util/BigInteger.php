@@ -259,7 +259,7 @@ class BigInteger
      */
     public function toString()
     {
-        return $this->value->toString();
+        return $this->__toString();
     }
 
 }
