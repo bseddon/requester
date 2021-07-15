@@ -184,13 +184,13 @@ class CertificateInfo
      * Extract the serial number from a certificate.
      *
      * @param \lyquidity\Asn1\Element\Sequence $certificate
-     *
+     * @param bool $asString (default: false) True if the number is to be returned as a string otherwise as binary
      * @return string Empty string if not found
      *
      * @see https://tools.ietf.org/html/rfc2459#section-4.1 for Certificate
      * @see https://tools.ietf.org/html/rfc5912#section-14 for CertificateSerialNumber
      */
-    public function extractSerialNumber(Sequence $certificate)
+    public function extractSerialNumber(Sequence $certificate, $asString = false )
     {
         /** @var Sequence */
         $tbsCertificate = $certificate->getFirstChildOfType(UniversalTagID::SEQUENCE);
@@ -204,8 +204,10 @@ class CertificateInfo
             return '';
         }
 
-        $encoder = new DerEncoder();
-        return $serialNumber->getEncodedValue( $encoder );
+        if ( $asString )
+            return $asString
+                ? $serialNumber->getValue()->__toString()
+                : $serialNumber->getEncodedValue( $this->derEncoder );
     }
 
     /**
