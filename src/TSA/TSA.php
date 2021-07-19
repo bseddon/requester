@@ -267,7 +267,7 @@ class TSA
 		// Create a request
 		$tsq = Sequence::create( [
 			Integer::create(1),
-			Sequence::create( [
+			Sequence::create( [ // MessageImprint
 				Sequence::create( [
 					ObjectIdentifier::create( \lyquidity\OID\OID::getOIDFromName( self::hashAlg ) ),
 					NullElement::create()
