@@ -83,6 +83,7 @@ class CertificateLoader
     /**
      * Convert (if necessary) a PEM-encoded certificate to DER format.
      * Code from phpseclib, by TerraFrost and other phpseclib contributors (see https://github.com/phpseclib/phpseclib).
+     * BMS 2021-07-16 The original code could not handle more than one certificate in a PEM file
      *
      * @param string $data
      *
@@ -90,11 +91,12 @@ class CertificateLoader
      */
     protected function ensureDer($data)
     {
-        $temp = preg_replace('/.*?^-+[^-]+-+[\r\n ]*$/ms', '', $data, 1);
-        $temp = preg_replace('/-+[^-]+-+/', '', $temp);
-        $temp = str_replace(["\r", "\n", ' '], '', $temp);
-        $temp = preg_match('/^[a-zA-Z\d\/+]*={0,2}$/', $temp) ? @base64_decode($temp, true) : false;
+        return \lyquidity\OCSP\Ocsp::pem2der( $data );
+        // $temp = preg_replace('/.*?^-+[^-]+-+[\r\n ]*$/ms', '', $data, 1);
+        // $temp = preg_replace('/-+[^-]+-+/', '', $temp);
+        // $temp = str_replace(["\r", "\n", ' '], '', $temp);
+        // $temp = preg_match('/^[a-zA-Z\d\/+]*={0,2}$/', $temp) ? @base64_decode($temp, true) : false;
 
-        return $temp ?: $data;
+        // return $temp ?: $data;
     }
 }
