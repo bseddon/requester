@@ -181,6 +181,28 @@ class CertificateInfo
     }
 
     /**
+     * Extract the serial number from a certificate as an Integer element
+     *
+     * @param \lyquidity\Asn1\Element\Sequence $certificate
+     * @param bool $asString (default: false) True if the number is to be returned as a string otherwise as binary
+     * @return Integer Null if not found
+     *
+     * @see https://tools.ietf.org/html/rfc2459#section-4.1 for Certificate
+     * @see https://tools.ietf.org/html/rfc5912#section-14 for CertificateSerialNumber
+     */
+    public function extractSerialNumberAsInteger(Sequence $certificate, $asString = false )
+    {
+        /** @var Sequence */
+        $tbsCertificate = $certificate->getFirstChildOfType(UniversalTagID::SEQUENCE);
+        if ($tbsCertificate === null) {
+            return '';
+        }
+
+        /** @var Integer */
+        return $tbsCertificate->getFirstChildOfType(UniversalTagID::INTEGER);
+    }
+
+    /**
      * Extract the serial number from a certificate.
      *
      * @param \lyquidity\Asn1\Element\Sequence $certificate
@@ -192,14 +214,8 @@ class CertificateInfo
      */
     public function extractSerialNumber(Sequence $certificate, $asString = false )
     {
-        /** @var Sequence */
-        $tbsCertificate = $certificate->getFirstChildOfType(UniversalTagID::SEQUENCE);
-        if ($tbsCertificate === null) {
-            return '';
-        }
-
         /** @var Integer */
-        $serialNumber = $tbsCertificate->getFirstChildOfType(UniversalTagID::INTEGER);
+        $serialNumber = $this->extractSerialNumberAsInteger( $certificate, $asString );
         if ($serialNumber === null) {
             return '';
         }
