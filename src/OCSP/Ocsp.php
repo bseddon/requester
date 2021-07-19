@@ -66,7 +66,7 @@ class Ocsp
         '1.3.14.3.2.26' => 'SHA1',
         '1.2.840.113549.2.5' => 'MD5',
         /* DN components */
-        '1.2.840.113549.1.9.1' => ''
+        '1.2.840.113549.1.9.1' => 'emailAddress'
     );
 
     const id_pkix_ocsp_basic = '1.3.6.1.5.5.7.48.1.1';
@@ -638,7 +638,7 @@ class Ocsp
 			$c = self::PEMize($cert, 'CERTIFICATE');
 		}
 
-		return openssl_verify($data, $signature, $c, $hashAlg);
+		return openssl_verify( $data, $signature, $c, $hashAlg );
 	}
 
     /**

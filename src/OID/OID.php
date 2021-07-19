@@ -188,7 +188,8 @@ class OID
 		// TSA
 		"1.2.840.113549.1.7.2" => "id-signedData",
 		"1.2.840.113549.1.9.16.1.4" => "id-ct-TSTInfo", // Defined in IETF RFC 3161.
-		"1.2.840.113549.1.9.16.2.12" => "signing-certificate", // S/MIME signing certificate
+		"1.2.840.113549.1.9.16.2.12" => "signing-certificate", // S/MIME signing certificate RFC 2634
+		"1.2.840.113549.1.9.16.2.47" => "signing-certificateV2", // S/MIME signing certificate V2 RFC 5035
 		"1.2.840.113549.1.9.3" => "id-contentType", // From IETF RFC 5652.
 		"1.2.840.113549.1.9.4" => "id-messageDigest", // From IETF RFC 5652.
 		"1.2.840.113549.1.9.5" => "id-signingTime", // From IETF RFC 5652.
@@ -260,6 +261,18 @@ class OID
 		"2.5.29.24" => "invalidityDate",			
 	);
 	
+	// algorithms hash
+	public static $digests = array(
+		"md2" => "1.2.840.113549.2.2",
+		"md4" => "1.2.840.113549.2.2",
+		"md5" => "1.2.840.113549.2.5",
+		"sha1" => "1.2.840.113549.2.26",
+		"sha256" => "2.16.840.1.101.3.4.2.1",
+        "sha384" => "2.16.840.1.101.3.4.2.2",
+        "sha512" => "2.16.840.1.101.3.4.2.3",
+        "sha224" => "2.16.840.1.101.3.4.2.4",
+	);
+
 	/**
 	 * Get OID from human name
 	 *
@@ -267,7 +280,7 @@ class OID
 	 * @return null|string OID
 	 */
 	public static function getOIDFromName($name) {
-		if( in_array($name, self::$oids ) )
+		if( in_array( $name, self::$oids ) )
 			return array_search( $name, OID::$oids );
 		else
 			return null;
