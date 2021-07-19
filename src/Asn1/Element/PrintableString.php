@@ -7,11 +7,11 @@
 
 namespace lyquidity\Asn1\Element;
 
-use lyquidity\Asn1\Element;
-use lyquidity\Asn1\Encoder;
-use lyquidity\Asn1\TaggableElement;
-use lyquidity\Asn1\UniversalTagID;
-use Ocsp\Exception\InvalidAsn1Value;
+use \lyquidity\Asn1\Element;
+use \lyquidity\Asn1\Encoder;
+use \lyquidity\Asn1\TaggableElement;
+use \lyquidity\Asn1\UniversalTagID;
+use \lyquidity\Asn1\Exception\InvalidAsn1Value;
 
 /**
  * ASN.1 element: PrintableString.
@@ -84,7 +84,7 @@ class PrintableString extends TaggableElement
      *
      * @param string $value
      *
-     * @throws \Ocsp\Exception\InvalidAsn1Value
+     * @throws \lyquidity\Asn1\Exception\InvalidAsn1Value
      *
      * @return $this
      */

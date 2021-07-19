@@ -22,7 +22,7 @@ interface Decoder
      *
      * @param string $bytes
      *
-     * @throws \Ocsp\Exception\Asn1DecodingException
+     * @throws \lyquidity\Asn1\Exception\Asn1DecodingException
      *
      * @return \lyquidity\Asn1\Element
      */

@@ -12,7 +12,7 @@ use lyquidity\Asn1\Element;
 use lyquidity\Asn1\Encoder;
 use lyquidity\Asn1\TaggableElement;
 use lyquidity\Asn1\UniversalTagID;
-use Ocsp\Exception\Asn1DecodingException;
+use \lyquidity\Asn1\Exception\Asn1DecodingException;
 
 /**
  * ASN.1 element: GENERALIZEDTIME.
@@ -29,7 +29,7 @@ class GeneralizedTime extends TaggableElement
      *
      * @param string $bytes
      *
-     * @throws \Ocsp\Exception\Asn1DecodingException
+     * @throws \lyquidity\Asn1\Exception\Asn1DecodingException
      *
      * @return \DateTimeImmutable
      */

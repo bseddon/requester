@@ -24,7 +24,7 @@ interface Encoder
      *
      * @param \lyquidity\Asn1\Element $element
      *
-     * @throws \Ocsp\Exception\Asn1EncodingException
+     * @throws \lyquidity\Asn1\Exception\Asn1EncodingException
      *
      * @return string
      */
