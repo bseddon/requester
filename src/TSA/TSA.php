@@ -256,7 +256,20 @@ class TSA
 	 * @param string $data The data to be timestamped
 	 * @param string $caBundlePath (optional: path to the location of a bundle of trusted CA certificates)
 	 * @param string $tsaURL The URL of a Timestamp authority (TSA) to use.  https://freetsa.org/tsr will be used by default
-	 * @return DER encode TST returned from the TSA
+	 * @return string DER encoded TST returned from the TSA
+	 */
+	public static function getTimestampDER( $data, $caBundlePath = null, $tsaURL = null )
+	{
+		$timestampToken = self::getTimestamp( $data, $caBundlePath, $tsaURL );
+		return (new Encoder())->encodeElement( $timestampToken );
+	}
+
+	/**
+	 * Call to request and validate a timestamp.  If successful returns the timestamp token (TST) as a sequence
+	 * @param string $data The data to be timestamped
+	 * @param string $caBundlePath (optional: path to the location of a bundle of trusted CA certificates)
+	 * @param string $tsaURL The URL of a Timestamp authority (TSA) to use.  https://freetsa.org/tsr will be used by default
+	 * @return Sequence TST returned from the TSA
 	 */
 	public static function getTimestamp( $data, $caBundlePath = null, $tsaURL = null )
 	{
@@ -354,6 +367,31 @@ class TSA
 		// Everything looks good so far so begin processing the TST
 		$timestampToken = $tsr->at(2)->asSequence();
 
+		self::validateTimeStampToken( $timestampToken );
+
+		return $timestampToken;
+	}
+
+	/**
+	 * Validate a timestamp token DER encoded
+	 * @param string $timestampTokenDER
+	 * @param string $data
+	 * @return bool
+	 */
+	public static function validateTimeStampTokenFromDER( $timestampTokenDER, $data = null  )
+	{
+		$timestampToken = (new Decoder())->decodeElement( $timestampTokenDER );
+		return self::validateTimeStampToken( $timestampToken, $data );
+	}
+
+	/**
+	 * Validate a timestamp token sequence
+	 * @param Sequence $timestampToken
+	 * @param string $data (optional) A copy of the original data that has been signed
+	 * @return bool
+	 */
+	public static function validateTimeStampToken( $timestampToken, $data = null )
+	{
 		// Check the OID required by RFC3161
 		if ( ! ( $oid = asObjectIdentifier( $timestampToken->at(1) ) ) || $oid->getIdentifier() != \lyquidity\OID\OID::getOIDFromName('id-signedData') )
 		{
@@ -383,7 +421,7 @@ class TSA
 		{
 			throw new \Exception('Expected Timestamp content info OID to \'id-ct-TSTInfo\'');
 		}
-	
+
 		// Inflate the string to retrieve the decoded content
 		$tstInfoRaw = asOctetString( $tst->getFirstChildOfType( 0, Element::CLASS_CONTEXTSPECIFIC, Tag::ENVIRONMENT_EXPLICIT ) );
 		if ( ! $tstInfoRaw )
@@ -391,12 +429,24 @@ class TSA
 			throw new \Exception('Expect TST info octet string');
 		}
 	
-		// $tstInfo = asSequence( (new Decoder())->decodeElement( $tstInfoRaw->getValue() ) );
-		// $tsVersion = asInteger( $tstInfo->getFirstChildOfType( UniversalTagID::INTEGER ) );
-		// $tsPpolicyId = asObjectIdentifier( $tstInfo->getFirstChildOfType( UniversalTagID::OBJECT_IDENTIFIER ) );
-		// $tsSerial= asInteger( $tstInfo->getNthChildOfType( 2, UniversalTagID::INTEGER ) );
-		// $messageImprint = asSequence( $tstInfo->getFirstChildOfType( UniversalTagID::SEQUENCE ) );
-		// $messageOctet = asOctetString( $messageImprint->getFirstChildOfType( UniversalTagID::OCTET_STRING ) );
+		if ( $data )
+		{
+			$tstInfo = asSequence( (new Decoder())->decodeElement( $tstInfoRaw->getValue() ) );
+			// $tsVersion = asInteger( $tstInfo->getFirstChildOfType( UniversalTagID::INTEGER ) );
+			// $tsPpolicyId = asObjectIdentifier( $tstInfo->getFirstChildOfType( UniversalTagID::OBJECT_IDENTIFIER ) );
+			// $tsSerial = asInteger( $tstInfo->getNthChildOfType( 2, UniversalTagID::INTEGER ) );
+			$messageImprint = asSequence( $tstInfo->getFirstChildOfType( UniversalTagID::SEQUENCE ) );
+			
+			// The message imprint contains the original imprint and the algorithm used to hash it 
+			// Get the algoritm.  $messageImprint is a sequence containing the algorithm and the digest
+			$oidSequence = asSequence( $messageImprint->getFirstChildOfType( UniversalTagID::SEQUENCE ) );
+			$algorithmOID = asObjectIdentifier( $oidSequence->getFirstChildOfType( UniversalTagID::OBJECT_IDENTIFIER ) );
+			$algorithm = \lyquidity\OID\OID::getNameFromOID( $algorithmOID->getIdentifier() );
+			$messageOctet = asOctetString( $messageImprint->getFirstChildOfType( UniversalTagID::OCTET_STRING ) );
+			$digest = hash( $algorithm, $data, true );
+			if ( $messageOctet->getValue() != $digest )
+				throw new \Exception("The message imprint contained within a TST is not the same as the hash of the data originally timestamped");
+		}
 
 		$signerInfos = \lyquidity\Asn1\asSet( $signedData->getNthChildOfType( 2, \lyquidity\Asn1\UniversalTagID::SET ) );
 		// Although the signer is stored in a SET (which implies multiple elements) there should be only one according to the spec
@@ -439,11 +489,14 @@ class TSA
 		$verified = self::verifyTimestamp( $signerInfo, $tstInfoRaw->getValue(), $certificate, $signedData );
 
 		// Make sure the signer certificate is not revoked
-		// Checking the revokation status of a signer cetificate just used seems excessive
-		// It will be needed when the timestamp is checked when part of a signed document
-		// $response = lyquidity\lyquidity\OCSP\Ocsp::sendRequest( $certificate, $issuerCertificate, $caBundlePath );
-
-		return (new Encoder())->encodeElement( $timestampToken );
+		if ( $data )
+		{
+			// Checking the revokation status of a signer cetificate just used seems excessive
+			// It will be needed if the timestamp is checked when part of a signed document
+			// $response = lyquidity\lyquidity\OCSP\Ocsp::sendRequest( $certificate, $issuerCertificate, $caBundlePath );
+		}
+	
+		return $verified;
 	}
 
 	/**
