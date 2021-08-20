@@ -71,7 +71,9 @@ class CertificateLoader
         if ($data === '') {
             throw Asn1DecodingException::create('Empty certificate');
         }
+
         $data = $this->ensureDer($data);
+
         $certificate = $this->derDecoder->decodeElement($data);
         if (!$certificate instanceof Sequence) {
             throw Asn1DecodingException::create();
@@ -91,12 +93,12 @@ class CertificateLoader
      */
     protected function ensureDer($data)
     {
-        return \lyquidity\OCSP\Ocsp::pem2der( $data );
-        // $temp = preg_replace('/.*?^-+[^-]+-+[\r\n ]*$/ms', '', $data, 1);
-        // $temp = preg_replace('/-+[^-]+-+/', '', $temp);
-        // $temp = str_replace(["\r", "\n", ' '], '', $temp);
-        // $temp = preg_match('/^[a-zA-Z\d\/+]*={0,2}$/', $temp) ? @base64_decode($temp, true) : false;
+        $temp = preg_replace('/.*?^-+[^-]+-+[\r\n ]*$/ms', '', $data, 1);
+        $temp = preg_replace('/-+[^-]+-+/', '', $temp);
+        $temp = str_replace(["\r", "\n", ' '], '', $temp);
+        $temp = preg_match('/^[a-zA-Z\d\/+]*={0,2}$/', $temp) ? @base64_decode($temp, true) : false;
+        // return \lyquidity\OCSP\Ocsp::pem2der( $data );
 
-        // return $temp ?: $data;
+        return $temp ? \lyquidity\OCSP\Ocsp::pem2der( $data ) : $data;
     }
 }
