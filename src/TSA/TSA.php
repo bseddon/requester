@@ -494,7 +494,7 @@ class TSA
 		// Make sure the signer certificate is not revoked
 		if ( $data )
 		{
-			// Checking the revokation status of a signer cetificate just used seems excessive
+			// Checking the revokation status of a signer certificate just used seems excessive
 			// It will be needed if the timestamp is checked when part of a signed document
 			$response = Ocsp::sendRequest( $certificate, $issuerCertificate, $caBundlePath );
 		}
