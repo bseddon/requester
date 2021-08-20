@@ -220,10 +220,10 @@ class CertificateInfo
             return '';
         }
 
-        if ( $asString )
-            return $asString
-                ? $serialNumber->getValue()->__toString()
-                : $serialNumber->getEncodedValue( $this->derEncoder );
+        // if ( $asString )
+        return $asString
+            ? $serialNumber->getValue()->__toString()
+            : $serialNumber->getEncodedValue( $this->derEncoder );
     }
 
     /**
@@ -390,9 +390,19 @@ class CertificateInfo
      */
     public function getDNString( Sequence $certificate, $useIssuer = false )
     {
-        $issuer = $useIssuer ? $this->extractIssuer( $certificate ) : $this->extractSubject( $certificate );
+        $generalNames = $useIssuer ? $this->extractIssuer( $certificate ) : $this->extractSubject( $certificate );
+        return $this->getDNStringFromNames( $generalNames );
+    }
+
+    /**
+     * Generate a names string from the sequence of generalNames
+     * @param Sequence $generalNames
+     * @return void
+     */
+    public function getDNStringFromNames( $generalNames )
+    {
         $names = array(); 
-        foreach( $issuer->getElements() as $dnSet )
+        foreach( $generalNames->getElements() as $dnSet )
         {
             /** @var Set $dnSet */
             $component = asSequence( $dnSet->at(1) );
