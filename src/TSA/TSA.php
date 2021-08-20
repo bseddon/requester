@@ -282,13 +282,14 @@ class TSA
 		if ( true )
 		{
 			$requestBody = ( new Encoder() )->encodeElement( $tsq );
-			$response = self::doRequest( $tsaURL	, $requestBody, 'application/timestamp-query', 'application/timestamp-reply', $caBundlePath );
+			$response = self::doRequest( $tsaURL, $requestBody, 'application/timestamp-query', 'application/timestamp-reply', $caBundlePath );
 			if ( $response === false ) 
 				throw new \Exception('The TSA request was not successful');
 		}
 		else
 		{
-			$response = file_get_contents('d:/GitHub/ocsp/freetsa.tsr');
+			// $response = file_get_contents('d:/GitHub/ocsp/freetsa.tsr');
+			$response = file_get_contents('d:/GitHub/ocsp/tsa.rsp');
 		}
 
 		// Process the response
@@ -454,7 +455,10 @@ class TSA
 	 */
 	private static function doRequest( $tsaUrl, $requestBody, $requestType, $responseType, $caBundlePath = null )
 	{
-		$caBundlePath = $caBundlePath ?? __DIR__ . '/cacerts-for-php-curl/cacerts.pem';
+		global $certificateBundlePath;
+
+		if ( ! $caBundlePath && isset( $certificateBundlePath ) )
+			$caBundlePath = $certificateBundlePath;
 
 		$hCurl = curl_init( );
 		curl_setopt_array($hCurl, [
