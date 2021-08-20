@@ -242,7 +242,7 @@ class Ocsp
 		if ($info['http_code'] !== 200) 
 		{
             $curlMessage = curl_error( $hCurl );
-			throw new \RuntimeException("Whoops, here we'd expect a 200 HTTP code ($curlMessage)");
+			throw new MissingResponseBytesException("Whoops, here we'd expect a 200 HTTP code ($curlMessage)");
 		}
 
 		if ( $info['content_type'] !== $responseType )
