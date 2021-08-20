@@ -222,6 +222,7 @@ use lyquidity\Asn1\Element\Set;
 use lyquidity\Asn1\Tag;
 use lyquidity\Asn1\UniversalTagID;
 use lyquidity\OCSP\CertificateInfo;
+use lyquidity\OCSP\Ocsp;
 
 use function lyquidity\Asn1\asBitString;
 use function lyquidity\Asn1\asInteger;
@@ -376,9 +377,10 @@ class TSA
 	 * Validate a timestamp token DER encoded
 	 * @param string $timestampTokenDER
 	 * @param string $data
+	 * @param string $caBundlePath (optional)
 	 * @return bool
 	 */
-	public static function validateTimeStampTokenFromDER( $timestampTokenDER, $data = null  )
+	public static function validateTimeStampTokenFromDER( $timestampTokenDER, $data = null, $caBundlePath = null )
 	{
 		$timestampToken = (new Decoder())->decodeElement( $timestampTokenDER );
 		return self::validateTimeStampToken( $timestampToken, $data );
@@ -388,9 +390,10 @@ class TSA
 	 * Validate a timestamp token sequence
 	 * @param Sequence $timestampToken
 	 * @param string $data (optional) A copy of the original data that has been signed
+	 * @param string $caBundlePath (optional)
 	 * @return bool
 	 */
-	public static function validateTimeStampToken( $timestampToken, $data = null )
+	public static function validateTimeStampToken( $timestampToken, $data = null, $caBundlePath = null )
 	{
 		// Check the OID required by RFC3161
 		if ( ! ( $oid = asObjectIdentifier( $timestampToken->at(1) ) ) || $oid->getIdentifier() != \lyquidity\OID\OID::getOIDFromName('id-signedData') )
@@ -493,7 +496,7 @@ class TSA
 		{
 			// Checking the revokation status of a signer cetificate just used seems excessive
 			// It will be needed if the timestamp is checked when part of a signed document
-			// $response = lyquidity\lyquidity\OCSP\Ocsp::sendRequest( $certificate, $issuerCertificate, $caBundlePath );
+			$response = Ocsp::sendRequest( $certificate, $issuerCertificate, $caBundlePath );
 		}
 	
 		return $verified;
