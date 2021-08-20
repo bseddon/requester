@@ -179,7 +179,7 @@ class Ocsp
         /** @var \lyquidity\Asn1\Element\Sequence $issuerCertificate */
 
         // Extract the relevant data from the two certificates
-        $requestInfo = $certificateInfo->extractRequestInfo($certificate, $issuerCertificate);
+        $requestInfo = $certificateInfo->extractRequestInfo( $certificate, $issuerCertificate );
 
         // Build the raw body to be sent to the OCSP Responder URL
         $ocsp = new Ocsp();
@@ -222,7 +222,10 @@ class Ocsp
 	 */
 	static function doRequest( $tsaUrl, $requestBody, $requestType, $responseType, $caBundlePath = null )
 	{
-		$caBundlePath = $caBundlePath ?? __DIR__ . '/cacerts-for-php-curl/cacerts.pem';
+        global $certificateBundlePath;
+
+        if ( ! $caBundlePath && isset( $certificateBundlePath ) )
+            $caBundlePath = $certificateBundlePath;
 
 		$hCurl = curl_init( );
 		curl_setopt_array($hCurl, [
@@ -231,13 +234,15 @@ class Ocsp
 			CURLOPT_POST => true,
 			CURLOPT_HTTPHEADER => ['Content-Type: ' . $requestType],
 			CURLOPT_POSTFIELDS => $requestBody,
-			// CURLOPT_CAINFO => $caBundlePath,
+			CURLOPT_CAINFO => $caBundlePath,
 		] );
 		$result = curl_exec($hCurl);
+
 		$info = curl_getinfo($hCurl);
 		if ($info['http_code'] !== 200) 
 		{
-			throw new \RuntimeException("Whoops, here we'd expect a 200 HTTP code");
+            $curlMessage = curl_error( $hCurl );
+			throw new \RuntimeException("Whoops, here we'd expect a 200 HTTP code ($curlMessage)");
 		}
 
 		if ( $info['content_type'] !== $responseType )
