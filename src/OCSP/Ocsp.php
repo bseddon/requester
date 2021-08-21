@@ -101,9 +101,10 @@ class Ocsp
         $result['certificateInfo'] = $certificateInfo = new CertificateInfo();
         $urlOfIssuerCertificate = $certificateInfo->extractIssuerCertificateUrl( $certificate );
         $result['ocspResponderUrl'] = $certificateInfo->extractOcspResponderUrl( $certificate );
-        $result['issuerBytes'] = $issuerBytes = $issuerCertificate ? (new DerEncoder())->encodeElement( $issuerCertificate ) : ( $urlOfIssuerCertificate ? file_get_contents( $urlOfIssuerCertificate ) : '' );
+        $issuerBytes = $issuerCertificate ? (new DerEncoder())->encodeElement( $issuerCertificate ) : ( $urlOfIssuerCertificate ? file_get_contents( $urlOfIssuerCertificate ) : '' );
         $certificateLoader = new CertificateLoader();
-        $result['issuerCertificate'] = $issuerCertificate ? $issuerCertificate : ( $issuerBytes ? $certificateLoader->fromString( $issuerBytes ) : null );
+        $result['issuerBytes'] = CertificateLoader::ensureDer( $issuerBytes );
+        $result['issuerCertificate'] = $issuerCertificate ? $issuerCertificate : ( $issuerBytes ? $certificateLoader->fromString( $result['issuerBytes'] ) : null );
         return $result;
     }
 
@@ -190,7 +191,7 @@ class Ocsp
         // For a simple debug option use the address of an OpenSSL 
         $result = Ocsp::doRequest( $ocspResponderUrl, $requestBody, Ocsp::OCSP_REQUEST_MEDIATYPE, Ocsp::OCSP_RESPONSE_MEDIATYPE, $caBundlePath );
 
-        $resultB64 = base64_encode( $result );
+        // $resultB64 = base64_encode( $result );
         // Decode the raw response from the OCSP Responder.  It will throw an error if the ASN 
         // is invalid or the signature is not correct.  Otherwise its necessary to check the 
         // decoded response.
@@ -558,7 +559,7 @@ class Ocsp
 
         $basicOCSPResponse = \lyquidity\Asn1\asSequence( $this->derDecoder->decodeElement( $responseBytes ) );
         if ( ! $basicOCSPResponse )
-    {
+        {
             throw Asn1DecodingException::create();
         }
 
@@ -571,7 +572,7 @@ class Ocsp
         $signers = $this->verifySigning( $basicOCSPResponse, $signer, $this->derEncoder->encodeElement( $tbsResponseData ) );
         if ( $signer && ! $signers )
         {
-            throw new ResponseException( 'The response is signed but the signature cannot be verified' );
+            throw new Exception\VerificationException( 'The response is signed but the signature cannot be verified' );
         }
     
         $responses = \lyquidity\Asn1\asSequence( $tbsResponseData->getFirstChildOfType( UniversalTagID::SEQUENCE ) );
@@ -672,15 +673,19 @@ class Ocsp
 		$certs = self::getSignerCerts( $sequence );
 		if ( isset( $cert ) )
 		{
-			$certs = array( $cert );
+			// $certs = array( $cert );
+			$certs[] = $cert;
 		}
 
         // If there are no certificates there can be no valid verification
         // This is not an error.  If the responder did not include a certificate and
         // the caller did not supply the responder's then no verification is possible.
+        $info = new CertificateInfo();
 
 		foreach( $certs as $cert )
 		{
+            $x = (new DerDecoder())->decodeElement( $cert );
+            $sn = $info->extractSerialNumber( $x, true );
 			$ret = self::_verifySig( $signedData, $signature, $cert, $hashAlg );
 			if ( $ret === 1 )
 			{
