@@ -19,6 +19,7 @@ use lyquidity\Asn1\Element\RawPrimitive;
 use lyquidity\Asn1\Element\Sequence;
 use lyquidity\Asn1\Tag;
 use lyquidity\Asn1\UniversalTagID;
+use lyquidity\Asn1\Util\BigInteger;
 use lyquidity\OID\OID;
 
 use function lyquidity\Asn1\asBitString;
@@ -220,10 +221,13 @@ class CertificateInfo
             return '';
         }
 
-        // if ( $asString )
-        return $asString
-            ? $serialNumber->getValue()->__toString()
-            : $serialNumber->getEncodedValue( $this->derEncoder );
+        if ( $asString )
+        {
+            $value = $serialNumber->getValue();
+            return $value instanceof BigInteger ? $value()->__toString() : strval( $value() );
+        }
+        else
+            return $serialNumber->getEncodedValue( $this->derEncoder );
     }
 
     /**
