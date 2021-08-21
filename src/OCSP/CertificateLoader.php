@@ -72,7 +72,7 @@ class CertificateLoader
             throw Asn1DecodingException::create('Empty certificate');
         }
 
-        $data = $this->ensureDer($data);
+        $data = self::ensureDer($data);
 
         $certificate = $this->derDecoder->decodeElement($data);
         if (!$certificate instanceof Sequence) {
@@ -91,7 +91,7 @@ class CertificateLoader
      *
      * @return string
      */
-    protected function ensureDer($data)
+    public static function ensureDer($data)
     {
         $temp = preg_replace('/.*?^-+[^-]+-+[\r\n ]*$/ms', '', $data, 1);
         $temp = preg_replace('/-+[^-]+-+/', '', $temp);
