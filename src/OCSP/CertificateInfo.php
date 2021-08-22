@@ -224,7 +224,7 @@ class CertificateInfo
         if ( $asString )
         {
             $value = $serialNumber->getValue();
-            return $value instanceof BigInteger ? $value()->__toString() : strval( $value() );
+            return $value instanceof BigInteger ? $value->__toString() : strval( $value );
         }
         else
             return $serialNumber->getEncodedValue( $this->derEncoder );
