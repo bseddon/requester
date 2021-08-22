@@ -142,7 +142,7 @@ class OID
 				return false;
 		}
 	}
-	
+
 	/** @var array Used (not full) list of OIDs and their human names */
 	protected static $oids = array(
 		// holdInstructions
@@ -233,13 +233,13 @@ class OID
   		"1.3.6.1.5.5.7.3.6" => "ipsecTunnel",
   		"1.3.6.1.5.5.7.3.7" => "ipsecUser",
   		"1.3.6.1.5.5.7.3.8" => "timeStamping",
-  	 	"1.3.6.1.5.5.7.3.9.1" => "ocspSigning-basic",
-  	 	"1.3.6.1.5.5.7.3.9.2" => "ocspSigning-nonce",
-  	 	"1.3.6.1.5.5.7.3.9.3" => "ocspSigning-crl",
-  	 	"1.3.6.1.5.5.7.3.9.4" => "ocspSigning-responce",
-  	 	"1.3.6.1.5.5.7.3.9.5" => "ocspSigning-nocheck",
-  	 	"1.3.6.1.5.5.7.3.9.6" => "ocspSigning-archive-cutoff",
-  	 	"1.3.6.1.5.5.7.3.9.7" => "ocspSigning-service-locator",
+  	 	// "1.3.6.1.5.5.7.3.9.1" => "ocspSigning-basic",
+  	 	// "1.3.6.1.5.5.7.3.9.2" => "ocspSigning-nonce",
+  	 	// "1.3.6.1.5.5.7.3.9.3" => "ocspSigning-crl",
+  	 	// "1.3.6.1.5.5.7.3.9.4" => "ocspSigning-responce",
+  	 	// "1.3.6.1.5.5.7.3.9.5" => "ocspSigning-nocheck",
+  	 	// "1.3.6.1.5.5.7.3.9.6" => "ocspSigning-archive-cutoff",
+  	 	// "1.3.6.1.5.5.7.3.9.7" => "ocspSigning-service-locator",
   	 	"1.3.6.1.5.5.7.3.10" => "dvcs",
   	 	"1.3.6.1.5.5.7.3.11" => "sbgpCertAAServerAuth",
   	 	"1.3.6.1.5.5.7.3.13" => "id-kp-eapOverPPP",
@@ -247,9 +247,16 @@ class OID
   	 	"1.3.6.1.5.5.7.3.15" => "id-kp-scvpServer",
   	 	"1.3.6.1.5.5.7.3.16" => "id-kp-scvpClient",
   	 	"1.3.6.1.5.5.7.3.17" => "id-kp-ipsecIKE",
-  	 	//
+
   	 	"1.3.6.1.5.5.7.48.1" => "ocsp",
   	 	"1.3.6.1.5.5.7.48.2" => "caIssuers",
+		"1.3.6.1.5.5.7.48.1.1" => "id-pkix-ocsp-basic",
+		"1.3.6.1.5.5.7.48.1.2" => "id-pkix-ocsp-nonce",
+		"1.3.6.1.5.5.7.48.1.3" => "id-pkix-ocsp-crl",
+		"1.3.6.1.5.5.7.48.1.4" => "id-pkix-ocsp-response",
+		"1.3.6.1.5.5.7.48.1.5" => "id-pkix-ocsp-nocheck",
+		"1.3.6.1.5.5.7.48.1.6" => "id-pkix-ocsp-archive-cutoff",
+		"1.3.6.1.5.5.7.48.1.7" => "id-pkix-ocsp-service-locator",
 		// <<<<< pkix (1.3.6.1.5.5.7)
 
 		"1.3.14.3.2.26" => "SHA1",
