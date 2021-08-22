@@ -82,6 +82,28 @@ class CertificateLoader
         return $certificate;
     }
 
+    const pemRegex = '/(-+?BEGIN CERTIFICATE-+[\r\n]*)(?<cert>[a-zA-Z0-9+\/=\r\n]*?)(-+?END CERTIFICATE-+[\r\n]*)/s';
+
+    /**
+     * If the argument has a PEM format then it will return an array of PEM 
+     * string where each element is one of the certificates in the source.
+     * If the source does not use a PEM format then the result will be false.
+     * @param string $pem
+     * @return string[]
+     */
+    public static function getCertificates( $pem )
+    {
+        if ( $pem )
+        if ( preg_match_all( self::pemRegex, $pem, $matches ) )
+        {
+            $certs = array_map( function( $cert ) { return base64_decode( str_replace(["\n", "\r"], '', $cert ) ); }, $matches['cert'] );
+            return $certs;
+        }
+
+        // Assume that if the regex failed then its not $pem is already DER encoded
+        return array();
+    }
+
     /**
      * Convert (if necessary) a PEM-encoded certificate to DER format.
      * Code from phpseclib, by TerraFrost and other phpseclib contributors (see https://github.com/phpseclib/phpseclib).
@@ -91,14 +113,22 @@ class CertificateLoader
      *
      * @return string
      */
-    public static function ensureDer($data)
+    public static function ensureDer( $data )
     {
-        $temp = preg_replace('/.*?^-+[^-]+-+[\r\n ]*$/ms', '', $data, 1);
-        $temp = preg_replace('/-+[^-]+-+/', '', $temp);
-        $temp = str_replace(["\r", "\n", ' '], '', $temp);
-        $temp = preg_match('/^[a-zA-Z\d\/+]*={0,2}$/', $temp) ? @base64_decode($temp, true) : false;
-        // return \lyquidity\OCSP\Ocsp::pem2der( $data );
+        if ( $certs = self::getCertificates( $data ) )
+        {
+            return $certs[0];
+        }
 
-        return $temp ? \lyquidity\OCSP\Ocsp::pem2der( $data ) : $data;
+        // Assume that if the regex failed then $data is already DER encoded
+        return $data;
+
+        // $temp = preg_replace('/.*?^-+[^-]+-+[\r\n ]*$/ms', '', $data, 1);
+        // $temp = preg_replace('/-+[^-]+-+/', '', $temp);
+        // $temp = str_replace(["\r", "\n", ' '], '', $temp);
+        // $temp = preg_match('/^[a-zA-Z\d\/+]*={0,2}$/', $temp) ? @base64_decode($temp, true) : false;
+        // // return \lyquidity\OCSP\Ocsp::pem2der( $data );
+        // 
+        // return $temp ? \lyquidity\OCSP\Ocsp::pem2der( $data ) : $data;
     }
 }
