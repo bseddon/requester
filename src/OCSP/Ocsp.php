@@ -91,6 +91,7 @@ class Ocsp
     /**
      * Parse the certificate to find the OCSP responder Url and the issuer certificate
      * @param Sequence $certificate
+     * @param Sequence|string $issuerCertificate
      * @return string[]
      */
     static function getCertificate( $certificate, $issuerCertificate = null )
@@ -101,10 +102,27 @@ class Ocsp
         $result['certificateInfo'] = $certificateInfo = new CertificateInfo();
         $urlOfIssuerCertificate = $certificateInfo->extractIssuerCertificateUrl( $certificate );
         $result['ocspResponderUrl'] = $certificateInfo->extractOcspResponderUrl( $certificate );
-        $issuerBytes = $issuerCertificate ? (new DerEncoder())->encodeElement( $issuerCertificate ) : ( $urlOfIssuerCertificate ? file_get_contents( $urlOfIssuerCertificate ) : '' );
+        $issuerBytes = $issuerCertificate 
+            ? ( $issuerCertificate instanceof Sequence 
+                ? (new DerEncoder())->encodeElement( $issuerCertificate )
+                : CertificateLoader::ensureDer( $issuerCertificate )
+              )
+            : ( $urlOfIssuerCertificate 
+                ? file_get_contents( $urlOfIssuerCertificate )
+                : ''
+              );
+        $issuerBytes = CertificateLoader::ensureDer( $issuerBytes );
         $certificateLoader = new CertificateLoader();
-        $result['issuerBytes'] = CertificateLoader::ensureDer( $issuerBytes );
-        $result['issuerCertificate'] = $issuerCertificate ? $issuerCertificate : ( $issuerBytes ? $certificateLoader->fromString( $result['issuerBytes'] ) : null );
+        $result['issuerBytes'] = $issuerBytes;
+        $result['issuerCertificate'] = $issuerCertificate 
+            ? ( $issuerCertificate instanceof Sequence
+                ? $issuerCertificate
+                : $certificateLoader->fromString( $issuerBytes )
+              )
+            : ( $issuerBytes
+                ? $certificateLoader->fromString( $issuerBytes )
+                : null
+              );
         return $result;
     }
 
@@ -114,7 +132,7 @@ class Ocsp
      * @param Sequence $subjectCertificate
      * @param Sequence $issuerCertificate If the issuer certificate is not provided it will be retrieve on the path found in the subject certificate
      * @return bool
-     * @throws \Exception If there is a problem validating the certificate
+     * @throws ResponseException If there is a problem validating the certificate
      */
     static function validateCertificate( Sequence $subjectCertificate, Sequence $issuerCertificate = null )
     {
@@ -128,22 +146,22 @@ class Ocsp
         {
             $issuerUrl = $certificateInfo->extractIssuerCertificateUrl( $subjectCertificate );
             if ( ! $issuerUrl )
-                throw new \Exception('The issuer certificate has not been provided and a url to the certificate is not in the subject certificate');
+                throw new ResponseException('The issuer certificate has not been provided and a url to the certificate is not in the subject certificate');
 
             if ( ! openssl_x509_export( file_get_contents( $issuerUrl ), $issuerCertificate ) )
-                throw new \Exception( sprintf( 'Unable to access the issuer certificate at the supplied location: \'%s\'', $issuerUrl ) );
+                throw new ResponseException( sprintf( 'Unable to access the issuer certificate at the supplied location: \'%s\'', $issuerUrl ) );
             // $issuerCertificate = self::PEMize( self::pem2der( file_get_contents( $issuerUrl ) ) );
         }
 
         // Get the subject's signature
         $signatureBytes = $certificateInfo->getSignatureBytes( $subjectCertificate );
         if ( ! $signatureBytes )
-            throw new \Exception('Unable to retrieve the encrypted signature from the subject certificate');
+            throw new ResponseException('Unable to retrieve the encrypted signature from the subject certificate');
         
         // The issuer's public key is needed to decode the subject signature
         $issuerPublicKey = openssl_pkey_get_public( $issuerCertificate );
         if ( openssl_public_decrypt( $signatureBytes, $decryptedSignature, $issuerPublicKey ) === false )
-            throw new \Exception('Unable to decrypt the subject signature using the issuer public key');
+            throw new ResponseException('Unable to decrypt the subject signature using the issuer public key');
 
         // Being able to decrypt the signature is probably good enough proof but confirming the hashes are the same makes sure the signer certificate is unchanged
 
@@ -159,7 +177,7 @@ class Ocsp
         $tbs = (new DerEncoder())->encodeElement( $subjectCertificate->at(1) );
         // And compare it with the one in the signature
         if ( bin2hex( $signatureHash->getValue() ) != hash( $hashName, $tbs ) )
-            throw new \Exception('');
+            throw new ResponseException('The signature hash and and the hash of the TBS are not the same');
      
         return true;
     }
@@ -176,8 +194,8 @@ class Ocsp
         list( $certificate, $certificateInfo, $ocspResponderUrl, $issuerCertBytes, $issuerCertificate ) = array_values( Ocsp::getCertificate( $certificate, $issuerCertificate ) );
 
         /** @var CertificateInfo $certificateInfo */
-        /** @var \lyquidity\Asn1\Element\Sequence $certificate */
-        /** @var \lyquidity\Asn1\Element\Sequence $issuerCertificate */
+        /** @var Sequence $certificate */
+        /** @var Sequence $issuerCertificate */
 
         // Extract the relevant data from the two certificates
         $requestInfo = $certificateInfo->extractRequestInfo( $certificate, $issuerCertificate );
@@ -209,9 +227,19 @@ class Ocsp
     static function sendRequestForFile( $path, $caBundlePath = null )
     {
         $certificateLoader = new CertificateLoader();
-        $certificate = $certificate = $certificateLoader->fromFile( $path );
+        $certs = CertificateLoader::getCertificates( file_get_contents( $path ) );
+        $certificate = null;
+        $issuerCertificate = null;
+        if ( $certs )
+        {
+            $certificate = $certificate = $certificateLoader->fromString( reset( $certs ) );
+            if ( next( $certs ) )
+                $issuerCertificate = $certificate = $certificateLoader->fromString( current( $certs ) );
+        }
+        else
+            $certificate = $certificate = $certificateLoader->fromFile( $path );
 
-        return self::sendRequest( $certificate, $caBundlePath );
+        return self::sendRequest( $certificate, $issuerCertificate, $caBundlePath );
     }
 
     /**
@@ -574,7 +602,42 @@ class Ocsp
         {
             throw new Exception\VerificationException( 'The response is signed but the signature cannot be verified' );
         }
-    
+
+        /** @var string[] */
+        $issuerSerialnumbers = array();
+
+        if ( $signers )
+        {
+            foreach( $signers as $signerDER )
+            {
+                // Create a Sequence for the certificate
+                $signerCertificate = (new DerDecoder())->decodeElement( $signerDER );
+
+                // Get the issuer certificate
+                list( $certificate, $certificateInfo, $ocspResponderUrl, $issuerCertBytes, $issuerCertificate ) = array_values( Ocsp::getCertificate( $signerCertificate ) );
+
+                /** @var CertificateInfo $certificateInfo */
+                /** @var \lyquidity\Asn1\Element\Sequence $certificate */
+                /** @var \lyquidity\Asn1\Element\Sequence $issuerCertificate */
+                if ( ! $issuerCertificate )
+                {
+                    throw new ResponseException("An issuer certificate cannot be found for the certificate used to sign the OCSP response");
+                }
+
+                try
+                {
+                    if ( ! $this->validateCertificate( $signerCertificate, $issuerCertificate ) )
+                    {
+                        throw new ResponseException("Failed to validate the certificate that signed the OCSP response");
+                    }
+                }
+                catch( ResponseException $ex )
+                {
+
+                }
+            }
+        }
+
         $responses = \lyquidity\Asn1\asSequence( $tbsResponseData->getFirstChildOfType( UniversalTagID::SEQUENCE ) );
         if (!$responses instanceof Sequence) {
             throw Asn1DecodingException::create();
@@ -583,8 +646,16 @@ class Ocsp
         $responseList = ResponseList::create();
         foreach ($responses->getElements() as $singleResponse)
         {
-            if ($singleResponse instanceof Sequence && $singleResponse->getTag() === null) {
-                $responseList->addResponse($this->decodeBasicSingleResponse($singleResponse));
+            if ($singleResponse instanceof Sequence && $singleResponse->getTag() === null) 
+            {
+                $response = $this->decodeBasicSingleResponse( $singleResponse );
+                if ( ! isset( $issuerSerialnumbers[ $response->getCertificateSerialNumber() ] ) )
+                {
+                    throw new ResponseException( "The serial number of the issuer certificate of the certificate used " . 
+                        "to sign the OCSP response does not match the serial number of the " . 
+                        "issuer certificate included in the OCSP reponse." );
+                }
+                $responseList->addResponse( $response );
             }
         }
 
@@ -632,10 +703,14 @@ class Ocsp
         return $der;
      }
 
-	/** @name Signature Verification
-	 *
-	 * Methods related to signature verification.  When called on those subclasses
-	 * of PKI2X\Message which describe signatureless messages.
+	/**
+	 * Verifies the content of $data can be signed by $cert to produce $signature
+     * 
+     * @param string $data
+     * @param string $signature
+     * @param string $cert DER encoded certificate used to sign $data
+     * @param string $hashAlg
+     * @return bool
 	 */
 	private static function _verifySig($data, $signature, $cert, $hashAlg)
 	{
@@ -644,37 +719,38 @@ class Ocsp
 			$c = self::PEMize($cert, 'CERTIFICATE');
 		}
 
-		return openssl_verify( $data, $signature, $c, $hashAlg );
+		return boolval( openssl_verify( $data, $signature, $c, $hashAlg ) );
 	}
 
     /**
      * Look for signature information in a sequence and if it exists verify the signing
      *
      * @param Sequence $sequence
-     * @param string $signer The certificate used to sign the parts of the response (the issuer certificate)
+     * @param string $signer DER encoded certificate used to sign the parts of the response (the issuer certificate)
      * @param string $signedData;
-     * @return boolean
+     * @return string[] DER encoded certificate
      */
-    public static function verifySigning( $sequence, $cert, $signedData )
+    public static function verifySigning( $sequence, $signer, $signedData )
     {
         // If there is a signature the sequence will have > 1 element otherwise return true
         if ( count( $sequence->getElements() ) <= 1 ) return true;
 
 		$signature = self::getSignatureRaw( $sequence );
+        /** @var string[] */
 		$signers = array();
 
 		$ha = self::getSignatureAlgorithm( $sequence );
 		$hashAlg = self::OID2Name[ $ha ];
 		if ( ! isset( $hashAlg ) )
 		{
-			throw new \Exception("Unsupported signature algorithm $ha");
+			throw new ResponseException("Unsupported signature algorithm $ha");
 		}
 
 		$certs = self::getSignerCerts( $sequence );
-		if ( isset( $cert ) )
+		if ( isset( $signer ) )
 		{
 			// $certs = array( $cert );
-			$certs[] = $cert;
+			$certs[] = $signer;
 		}
 
         // If there are no certificates there can be no valid verification
@@ -684,10 +760,8 @@ class Ocsp
 
 		foreach( $certs as $cert )
 		{
-            $x = (new DerDecoder())->decodeElement( $cert );
-            $sn = $info->extractSerialNumber( $x, true );
 			$ret = self::_verifySig( $signedData, $signature, $cert, $hashAlg );
-			if ( $ret === 1 )
+			if ( $ret === true )
 			{
 				array_push( $signers, $cert );
 			}
@@ -764,6 +838,7 @@ class Ocsp
         }
         /** @var Integer */
         $integer = $certID->getFirstChildOfType(UniversalTagID::INTEGER, Element::CLASS_UNIVERSAL);
+        // This is the issuer serial number
         $certificateSerialNumber = (string) $integer->getValue();
         /** @var GeneralizedTime */
         $genTime = $singleResponse->getFirstChildOfType(UniversalTagID::GENERALIZEDTIME, Element::CLASS_UNIVERSAL);
