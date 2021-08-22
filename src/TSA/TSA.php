@@ -368,6 +368,8 @@ class TSA
 		// Everything looks good so far so begin processing the TST
 		$timestampToken = $tsr->at(2)->asSequence();
 
+		// Don't pass data.  Don't need an OCSP check here and $data is a trigger for an OCSP request.
+		// The TSA caller can check the certificate using OCSP when needed.
 		self::validateTimeStampToken( $timestampToken );
 
 		return $timestampToken;
