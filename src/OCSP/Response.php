@@ -135,11 +135,11 @@ class Response
      * @param \DateTimeImmutable $thisUpdate
      * @param string $certificateSerialNumber
      *
-     * @return static
+     * @return Response
      */
     public static function good(DateTimeImmutable $thisUpdate, $certificateSerialNumber)
     {
-        $result = new static($thisUpdate, $certificateSerialNumber);
+        $result = new Response($thisUpdate, $certificateSerialNumber);
         $result->revoked = false;
 
         return $result;
@@ -152,11 +152,11 @@ class Response
      * @param string $certificateSerialNumber
      * @param \DateTimeImmutable $revokedOn
      *
-     * @return static
+     * @return Response
      */
     public static function revoked(DateTimeImmutable $thisUpdate, $certificateSerialNumber, DateTimeImmutable $revokedOn, $revocationReason = self::REVOCATIONREASON_UNSPECIFIED)
     {
-        $result = new static($thisUpdate, $certificateSerialNumber);
+        $result = new Response($thisUpdate, $certificateSerialNumber);
         $result->revoked = true;
         $result->revokedOn = $revokedOn;
         $result->revocationReason = (int) $revocationReason;
@@ -170,11 +170,11 @@ class Response
      * @param \DateTimeImmutable $thisUpdate
      * @param string $certificateSerialNumber
      *
-     * @return static
+     * @return Response
      */
     public static function unknown(DateTimeImmutable $thisUpdate, $certificateSerialNumber)
     {
-        $result = new static($thisUpdate, $certificateSerialNumber);
+        $result = new Response($thisUpdate, $certificateSerialNumber);
 
         return $result;
     }
