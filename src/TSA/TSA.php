@@ -298,7 +298,7 @@ class TSA
 			$requestBody = ( new Encoder() )->encodeElement( $tsq );
 			$response = self::doRequest( $tsaURL, $requestBody, 'application/timestamp-query', 'application/timestamp-reply', $caBundlePath );
 			if ( $response === false ) 
-				throw new \Exception('The TSA request was not successful');
+				throw new TSAException('The TSA request was not successful');
 		}
 		else
 		{
@@ -313,7 +313,7 @@ class TSA
 		$statusValue = asInteger( $status->at(1) );
 	
 		if ( ! $statusValue )
-			throw new \Exception('Invalid TSR status value');
+			throw new TSAException('Invalid TSR status value');
 	
 		if ( $statusValue->getValue() != 0 )
 		{
@@ -362,7 +362,7 @@ class TSA
 				}
 			}
 	
-			throw new \Exception( $message );
+			throw new TSAException( $message );
 		}
 
 		// Everything looks good so far so begin processing the TST
@@ -398,7 +398,7 @@ class TSA
 		// Check the OID required by RFC3161
 		if ( ! ( $oid = asObjectIdentifier( $timestampToken->at(1) ) ) || $oid->getIdentifier() != \lyquidity\OID\OID::getOIDFromName('id-signedData') )
 		{
-			throw new \Exception('Expected Timestamp Token OID to be \'id-signedData\'');
+			throw new TSAException('Expected Timestamp Token OID to be \'id-signedData\'');
 		}
 
 		// Retrieve the section containing the signed information
@@ -422,14 +422,14 @@ class TSA
 			( ! $tstInfoOID = asObjectIdentifier( $tst->getFirstChildOfType( UniversalTagID::OBJECT_IDENTIFIER ) ) ) || 
 			$tstInfoOID->getIdentifier() != \lyquidity\OID\OID::getOIDFromName('id-ct-TSTInfo') )
 		{
-			throw new \Exception('Expected Timestamp content info OID to \'id-ct-TSTInfo\'');
+			throw new TSAException('Expected Timestamp content info OID to \'id-ct-TSTInfo\'');
 		}
 
 		// Inflate the string to retrieve the decoded content
 		$tstInfoRaw = asOctetString( $tst->getFirstChildOfType( 0, Element::CLASS_CONTEXTSPECIFIC, Tag::ENVIRONMENT_EXPLICIT ) );
 		if ( ! $tstInfoRaw )
 		{
-			throw new \Exception('Expect TST info octet string');
+			throw new TSAException('Expect TST info octet string');
 		}
 	
 		if ( $data )
@@ -448,30 +448,30 @@ class TSA
 			$messageOctet = asOctetString( $messageImprint->getFirstChildOfType( UniversalTagID::OCTET_STRING ) );
 			$digest = hash( $algorithm, $data, true );
 			if ( $messageOctet->getValue() != $digest )
-				throw new \Exception("The message imprint contained within a TST is not the same as the hash of the data originally timestamped");
+				throw new TSAException("The message imprint contained within a TST is not the same as the hash of the data originally timestamped");
 		}
 
 		$signerInfos = \lyquidity\Asn1\asSet( $signedData->getNthChildOfType( 2, \lyquidity\Asn1\UniversalTagID::SET ) );
 		// Although the signer is stored in a SET (which implies multiple elements) there should be only one according to the spec
 		if ( ! $signerInfos || count( $signerInfos->getElements() ) == 0 || ! $signerInfo = $signerInfos->at(1)->asSequence() )
-			throw new \Exception('There are no signer infos in the response');
+			throw new TSAException('There are no signer infos in the response');
 
 		// Get the certificate used for signing
 		$certificate = self::getCertificateForSigner( $signedData, $signerInfo );
 		if ( ! $certificate )
-			throw new \Exception('Unable to locate the certificate used to sign the timestamp in the response');
+			throw new TSAException('Unable to locate the certificate used to sign the timestamp in the response');
 
 		// The dates on the signing certificate must be valid
 		$certificateInfo = new CertificateInfo();
 		$dates = $certificateInfo->extractDates( $certificate );
 		if ( ! $dates )
-			throw new \Exception('The certificate does not contain start/end dates');
+			throw new TSAException('The certificate does not contain start/end dates');
 
 		$now = new \DateTimeImmutable("now");
 		if ( $dates['start']->getTimestamp() > $now->getTimestamp() )
-			throw new \Exception('The signing certificate start date falls in the future');
+			throw new TSAException('The signing certificate start date falls in the future');
 		if ( $dates['end']->getTimestamp() < $now->getTimestamp() )
-			throw new \Exception('The signing certificate has expired');
+			throw new TSAException('The signing certificate has expired');
 
 		// Find the issuer cerificiate in the response
 		$issuerCertificate = self::getIssuerCertificate( $signedData );
@@ -479,12 +479,12 @@ class TSA
 		// The dates on the issuer certificate must be valid
 		$dates = $certificateInfo->extractDates( $issuerCertificate );
 		if ( ! $dates )
-			throw new \Exception('The issuer certificate does not contain start/end dates');
+			throw new TSAException('The issuer certificate does not contain start/end dates');
 
 		if ( $dates['start']->getTimestamp() > $now->getTimestamp() )
-			throw new \Exception('The issuer certificate start date falls in the future');
+			throw new TSAException('The issuer certificate start date falls in the future');
 		if ( $dates['end']->getTimestamp() < $now->getTimestamp() )
-			throw new \Exception('The issuer certificate has expired');
+			throw new TSAException('The issuer certificate has expired');
 
 		// And use it to validate the signer's certificate
 		\lyquidity\OCSP\Ocsp::validateCertificate( $certificate, $issuerCertificate );
@@ -699,11 +699,11 @@ class TSA
 		);
 
 		if ( ! $digestAlgorithm )
-			throw new \Exception('Unable to find a digest algorithm in the signers info');
+			throw new TSAException('Unable to find a digest algorithm in the signers info');
 
 		$digestAlgoritmName = \lyquidity\OID\OID::getNameFromOID( $digestAlgorithm->getIdentifier() );
 		if ( ! $digestAlgoritmName )
-			throw new \Exception("The digest algorithm OID '{$digestAlgorithm->getIdentifier()}' is not recognized");
+			throw new TSAException("The digest algorithm OID '{$digestAlgorithm->getIdentifier()}' is not recognized");
 
 		// Hash the tstInfoRaw using the digest algorithm
 		$hash = hash( $digestAlgoritmName, $timestampRaw, true );
@@ -713,7 +713,7 @@ class TSA
 		// For throw an error.  The specification says that if there are no signed 
 		// attributes then the signature should be on the timestamp raw
 		if ( ! $signedAttributes )
-			throw new \Exception('Unable to find signed attributes.');
+			throw new TSAException('Unable to find signed attributes.');
 
 		// Find the computed message digest
 		$messageDigestOID = \lyquidity\OID\OID::getOIDFromName('id-messageDigest');
@@ -735,11 +735,11 @@ class TSA
 		}
 
 		if ( ! $messageDigest )
-			throw new \Exception('Unable to find the message digest in the signer info');
+			throw new TSAException('Unable to find the message digest in the signer info');
 
 		// Check the hashes match
 		if ( $messageDigest != $hash )
-			throw new \Exception('The computed hash of the signed timestamp does not match the hash generated by the TSA');
+			throw new TSAException('The computed hash of the signed timestamp does not match the hash generated by the TSA');
 
 		// Need to create a SET of the signed attributes to hash
 		$set = Set::create( $signedAttributes->getElements() ); // ->setTag( Tag::explicit( UniversalTagID::SET ) );
@@ -748,7 +748,7 @@ class TSA
 		// Verify the signature
 		$signature = asOctetString( $signerInfo->getFirstChildOfType( UniversalTagID::OCTET_STRING ) );
 		if ( ! $signature )
-			throw new \Exception('Unable to find the signature');
+			throw new TSAException('Unable to find the signature');
 
 		$pem = \lyquidity\OCSP\Ocsp::PEMize( (new Encoder())->encodeElement( $certificate ) );
 		$publicKey = openssl_pkey_get_public( $pem );
@@ -757,20 +757,20 @@ class TSA
 		$ca_pkey_details = openssl_pkey_get_details( $publicKey );
 
 		if ( $ca_pkey_details === false )
-			throw new \Exception('Public key not valid');
+			throw new TSAException('Public key not valid');
 
 		$ca_pkey_type = $ca_pkey_details['type'];
 		$algs_cipher = array( OPENSSL_KEYTYPE_RSA, OPENSSL_KEYTYPE_DSA, OPENSSL_KEYTYPE_DH, OPENSSL_KEYTYPE_EC );
 
 		if ( ! in_array( $ca_pkey_type, $algs_cipher ) )
-			throw new \Exception('The cipher used by the public key is not supported');
+			throw new TSAException('The cipher used by the public key is not supported');
 
 		$algorithm = \lyquidity\OID\OID::getOpenSSLAlgorithm( $digestAlgoritmName );
 
 		$result = openssl_verify( $enc, $signature->getValue(), $publicKey, $algorithm );
 
 		if ( $result != 1 )
-			throw new \Exception('The response signature cannot be verified');
+			throw new TSAException('The response signature cannot be verified');
 
 		return true;
 	}
