@@ -207,14 +207,14 @@ class Ocsp
 
         // Actually call the OCSP Responder URL (here we use cURL, you can use any library you prefer)
         // For a simple debug option use the address of an OpenSSL 
-        $result = Ocsp::doRequest( $ocspResponderUrl, $requestBody, Ocsp::OCSP_REQUEST_MEDIATYPE, Ocsp::OCSP_RESPONSE_MEDIATYPE, $caBundlePath );
+        // $result = Ocsp::doRequest( $ocspResponderUrl, $requestBody, Ocsp::OCSP_REQUEST_MEDIATYPE, Ocsp::OCSP_RESPONSE_MEDIATYPE, $caBundlePath );
+        $result = file_get_contents('D:\\GitHub\\xml-signer\\ocsp.rsp');
 
         // $resultB64 = base64_encode( $result );
         // Decode the raw response from the OCSP Responder.  It will throw an error if the ASN 
         // is invalid or the signature is not correct.  Otherwise its necessary to check the 
         // decoded response.
-        $response = $ocsp->decodeOcspResponseSingle( $result, $issuerCertBytes );
-        return;
+        return $ocsp->decodeOcspResponseSingle( $result, $issuerCertBytes );
     }
 
     /**
@@ -270,6 +270,7 @@ class Ocsp
 		$info = curl_getinfo($hCurl);
 		if ($info['http_code'] !== 200) 
 		{
+
             $curlMessage = curl_error( $hCurl );
 			throw new MissingResponseBytesException("Whoops, here we'd expect a 200 HTTP code ($curlMessage)");
 		}
@@ -603,9 +604,6 @@ class Ocsp
             throw new Exception\VerificationException( 'The response is signed but the signature cannot be verified' );
         }
 
-        /** @var string[] */
-        $issuerSerialnumbers = array();
-
         if ( $signers )
         {
             foreach( $signers as $signerDER )
@@ -633,7 +631,7 @@ class Ocsp
                 }
                 catch( ResponseException $ex )
                 {
-
+                    throw $ex;
                 }
             }
         }
@@ -649,12 +647,6 @@ class Ocsp
             if ($singleResponse instanceof Sequence && $singleResponse->getTag() === null) 
             {
                 $response = $this->decodeBasicSingleResponse( $singleResponse );
-                if ( ! isset( $issuerSerialnumbers[ $response->getCertificateSerialNumber() ] ) )
-                {
-                    throw new ResponseException( "The serial number of the issuer certificate of the certificate used " . 
-                        "to sign the OCSP response does not match the serial number of the " . 
-                        "issuer certificate included in the OCSP reponse." );
-                }
                 $responseList->addResponse( $response );
             }
         }

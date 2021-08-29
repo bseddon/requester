@@ -494,10 +494,10 @@ class TSA
 		$verified = self::verifyTimestamp( $signerInfo, $tstInfoRaw->getValue(), $certificate, $signedData );
 
 		// Make sure the signer certificate is not revoked
-		if ( $data )
+		if ( $data && $verified )
 		{
-			// Checking the revokation status of a signer certificate just used seems excessive
-			// It will be needed if the timestamp is checked when part of a signed document
+			// Checking the revokation status of a signer certificate just created seems excessive
+			// It will be needed if the timestamp is checked when part of a signed document so only when $data has a value
 			$response = Ocsp::sendRequest( $certificate, $issuerCertificate, $caBundlePath );
 		}
 	
