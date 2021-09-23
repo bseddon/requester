@@ -519,14 +519,15 @@ class TSA
 			$caBundlePath = $certificateBundlePath;
 
 		$hCurl = curl_init( );
-		curl_setopt_array($hCurl, [
+		curl_setopt_array($hCurl, array_filter( [
 			CURLOPT_URL => $tsaUrl,
 			CURLOPT_RETURNTRANSFER => true,
 			CURLOPT_POST => true,
 			CURLOPT_HTTPHEADER => ['Content-Type: ' . $requestType],
 			CURLOPT_POSTFIELDS => $requestBody,
 			CURLOPT_CAINFO => $caBundlePath,
-		] );
+		] ) );
+		
 		$result = curl_exec($hCurl);
 		$info = curl_getinfo($hCurl);
 		if ($info['http_code'] !== 200) 
