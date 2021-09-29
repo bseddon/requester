@@ -209,6 +209,8 @@
 
 namespace lyquidity\TSA;
 
+use DateTime;
+use Exception;
 use lyquidity\Asn1\Der\Decoder;
 use lyquidity\Asn1\Der\Encoder;
 use lyquidity\Asn1\Element;
@@ -219,12 +221,14 @@ use lyquidity\Asn1\Element\ObjectIdentifier;
 use lyquidity\Asn1\Element\OctetString;
 use lyquidity\Asn1\Element\Sequence;
 use lyquidity\Asn1\Element\Set;
+use lyquidity\Asn1\Exception\Asn1DecodingException;
 use lyquidity\Asn1\Tag;
 use lyquidity\Asn1\UniversalTagID;
 use lyquidity\OCSP\CertificateInfo;
 use lyquidity\OCSP\Ocsp;
 
 use function lyquidity\Asn1\asBitString;
+use function lyquidity\Asn1\asGeneralizedTime;
 use function lyquidity\Asn1\asInteger;
 use function lyquidity\Asn1\asObjectIdentifier;
 use function lyquidity\Asn1\asOctetString;
@@ -776,5 +780,59 @@ class TSA
 			throw new TSAException('The response signature cannot be verified');
 
 		return true;
+	}
+
+	/**
+	 * Return the DateTime instance from the timestamp token returned by a TSA
+	 * @param string $timestampDERBase64 Base 64 encoded DER string of the TST
+	 * @return DateTime 
+	 * @throws Asn1DecodingException 
+	 * @throws TSAException 
+	 */
+	public static function getDateFromTSTDERBase64( $timestampDERBase64 )
+	{
+		$timestampDER = base64_decode( $timestampDERBase64 );
+		return self::getDateFromTSTDER( $timestampDER );
+	}
+
+	/**
+	 * Return the DateTime instance from the timestamp token returned by a TSA
+	 * @param string $timestampDER DER encode string of the TST
+	 * @return DateTime 
+	 * @throws Asn1DecodingException 
+	 * @throws TSAException 
+	 */
+	public static function getDateFromTSTDER( $timestampDER )
+	{
+		// Inflate the DER
+		$decode = new Decoder();
+		$timestampToken = $decode->decodeElement( $timestampDER );
+		$timestampToken = asSequence( $timestampToken ); // This line is a kludge.  PHP does not resolve functions automatically but it will be available after the call to decodeElement()
+		if ( ! $timestampToken )
+			throw new TSAException("Oops! Not valid timestamp token");
+
+		// Get the signed data
+		$signedData = asSequence( $timestampToken->getNthChildOfType( 1, 0, Element::CLASS_CONTEXTSPECIFIC, Tag::ENVIRONMENT_EXPLICIT ) );
+		if ( ! $signedData )
+			throw new TSAException("Oops! Not valid signed data");
+
+		// The raw timestamped input is held DER encoded in an octet string
+		$tst = asSequence( $signedData->getFirstChildOfType( UniversalTagID::SEQUENCE ) );
+
+		// Inflate the string to retrieve the decoded content
+		$tstInfoRaw =  asOctetString( $tst->getFirstChildOfType( 0,  Element::CLASS_CONTEXTSPECIFIC,  Tag::ENVIRONMENT_EXPLICIT ) );
+		if ( ! $tstInfoRaw )
+		{
+			throw new TSAException('Expect TST info octet string');
+		}
+		$tstInfo = asSequence( (new Decoder())->decodeElement( $tstInfoRaw->getValue() ) );
+		if ( ! $tstInfo )
+			throw new TSAException("Unable to access the TST info from the timestamp token");
+
+		$time = asGeneralizedTime( $tstInfo->getFirstChildOfType( UniversalTagID::GENERALIZEDTIME ) );
+		if ( ! $time )
+			throw new TSAException("Unable to access the signing date time from the TST");
+
+		return $time->getValue();
 	}
 }
