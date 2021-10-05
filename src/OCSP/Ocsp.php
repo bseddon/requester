@@ -203,12 +203,12 @@ class Ocsp
         // Build the raw body to be sent to the OCSP Responder URL
         $ocsp = new Ocsp();
         $requestBody = $ocsp->buildOcspRequestBodySingle($requestInfo);
-        // $b64 = base64_encode( $requestBody );
+        $b64 = base64_encode( $requestBody );
 
         // Actually call the OCSP Responder URL (here we use cURL, you can use any library you prefer)
         // For a simple debug option use the address of an OpenSSL 
-        // $result = Ocsp::doRequest( $ocspResponderUrl, $requestBody, Ocsp::OCSP_REQUEST_MEDIATYPE, Ocsp::OCSP_RESPONSE_MEDIATYPE, $caBundlePath );
-        $result = file_get_contents('D:\\GitHub\\xml-signer\\ocsp.rsp');
+        $result = Ocsp::doRequest( $ocspResponderUrl, $requestBody, Ocsp::OCSP_REQUEST_MEDIATYPE, Ocsp::OCSP_RESPONSE_MEDIATYPE, $caBundlePath );
+        // $result = file_get_contents('D:\\GitHub\\xml-signer\\ocsp.rsp');
 
         // $resultB64 = base64_encode( $result );
         // Decode the raw response from the OCSP Responder.  It will throw an error if the ASN 
@@ -235,6 +235,7 @@ class Ocsp
             $certificate = $certificate = $certificateLoader->fromString( reset( $certs ) );
             if ( next( $certs ) )
                 $issuerCertificate = $certificate = $certificateLoader->fromString( current( $certs ) );
+            // $issuerCertificate = $certificateLoader->fromString( file_get_contents( dirname( $path ) . '/ca/ca.crt' ) );
         }
         else
             $certificate = $certificate = $certificateLoader->fromFile( $path );
