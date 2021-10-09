@@ -187,7 +187,7 @@ class Ocsp
      *
      * @param \lyquidity\Asn1\Element\Sequence $certificate
 	 * @param string $caBundlePath (optional: path to the location of a bundle of trusted CA certificates)
-     * @return bool
+     * @return Response
      */
     static function sendRequest( $certificate, $issuerCertificate = null, $caBundlePath = null )
     {

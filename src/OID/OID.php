@@ -89,17 +89,17 @@ class OID
 			case OPENSSL_KEYTYPE_RSA:
 				switch($digest) {
 					case OPENSSL_ALGO_SHA1:
-						return self::getOIDFromName('sha1withRSAEncryption');
+						return self::getOIDFromName('RSA-SHA1'); // ('sha1withRSAEncryption');
 					case OPENSSL_ALGO_SHA224:
-						return self::getOIDFromName('sha224withRSAEncryption');
+						return self::getOIDFromName('SHA224'); // ('sha224withRSAEncryption');
 					case OPENSSL_ALGO_SHA256:
-						return self::getOIDFromName('sha256withRSAEncryption');
+						return self::getOIDFromName('SHA256'); // ('sha256withRSAEncryption');
 					case OPENSSL_ALGO_SHA384:
-						return self::getOIDFromName('sha384withRSAEncryption');
+						return self::getOIDFromName('SHA384'); // ('sha384withRSAEncryption');
 					case OPENSSL_ALGO_SHA512:
-						return self::getOIDFromName('sha512withRSAEncryption');
+						return self::getOIDFromName('SHA512'); // ('sha512withRSAEncryption');
 					case OPENSSL_ALGO_MD5:
-						return self::getOIDFromName('md5withRSAEncryption');
+						return self::getOIDFromName('RSA-MD5'); // ('md5withRSAEncryption');
 					case OPENSSL_ALGO_MD4:
 						return self::getOIDFromName('md4withRSAEncryption');
 					case OPENSSL_ALGO_MD2:
