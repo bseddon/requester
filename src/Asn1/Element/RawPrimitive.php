@@ -9,8 +9,8 @@ namespace lyquidity\Asn1\Element;
 
 use lyquidity\Asn1\Util\BigInteger;
 use lyquidity\Asn1\Encoder;
+use lyquidity\Asn1\Exception\Asn1EncodingException as ExceptionAsn1EncodingException;
 use lyquidity\Asn1\TaggableElement;
-use Ocsp\Exception\Asn1EncodingException;
 
 /**
  * An un-decoded ASN.1 PRIMITIVE element.
@@ -116,6 +116,6 @@ class RawPrimitive extends TaggableElement
         if ($encoder->getEncodingHandle() === $this->encoding) {
             return $this->rawEncodedValue;
         }
-        throw Asn1EncodingException::create('Unable to decode/encode an ASN.1 element');
+        throw \lyquidity\Asn1\Exception\Asn1EncodingException::create('Unable to decode/encode an ASN.1 element');
     }
 }
