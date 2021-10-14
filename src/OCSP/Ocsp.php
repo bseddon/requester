@@ -491,8 +491,8 @@ class Ocsp
             if ( $response !== null )
             {
                 switch ( $responseType->getIdentifier() )
-    {
-                case '1.3.6.1.5.5.7.48.1.1':
+				{
+					case '1.3.6.1.5.5.7.48.1.1':
                         return $this->decodeBasicResponse( $response->getValue(), $signer );
                 }
             }
