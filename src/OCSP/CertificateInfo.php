@@ -24,6 +24,7 @@ use lyquidity\OID\OID;
 
 use function lyquidity\Asn1\asBitString;
 use function lyquidity\Asn1\asObjectIdentifier;
+use function lyquidity\Asn1\asRawPrimitive;
 use function lyquidity\Asn1\asSequence;
 use function lyquidity\Asn1\asUTCTime;
 
@@ -517,4 +518,71 @@ class CertificateInfo
 
         return count( $matched ) > 0;
     }
+
+	/**
+	 * Return the value for an OID
+	 *
+	 * @param string $ext_oid
+	 * @param \lyquidity\Asn1\Element\Sequence $extensions
+	 * @return string
+	 */
+	public static function findExtensionValue( $ext_oid, $extensions ) 
+	{
+		if( preg_match( "|^\d+(\.\d+)+$|s", $ext_oid ) )
+		{
+			$is_oid = true;
+		}
+		else
+		{
+			$ext_name = $ext_oid;
+			$ext_oid = \lyquidity\OID\OID::getOIDFromName($ext_name);
+			$is_oid = ! is_null( $ext_oid );
+		}
+
+		foreach( $extensions->getElements() as $k => $seq ) 
+		{
+			if ( ! $seq->isConstructed() ) continue;
+			/** @var \lyquidity\Asn1\Element\Sequence $seq */
+			$oid = \lyquidity\Asn1\asObjectIdentifier( $seq->at(1) );
+			if ( ! $oid ) continue;
+			$EXT_OID = $oid->getIdentifier();
+			if( $is_oid ? ( $EXT_OID == $ext_oid ) : ( \lyquidity\OID\OID::getNameFromOID( $EXT_OID ) == $ext_name ) )
+			{
+				$hasCritical = $seq->at(1) instanceof \lyquidity\Asn1\Element\Boolean;
+				$extValue = \lyquidity\Asn1\asOctetString( $seq->at( $hasCritical ? 3 : 2 ) );
+				return $extValue ? $extValue->getValue() : null;
+			}
+		}
+		return null;
+	}
+
+    /**
+     * Get the CRL extension if it exists in the certificate
+     * @param Sequence $cert 
+     * @return string|false 
+     */
+    function extractCRLUrl( $cert )
+    {
+        $extensions = asSequence( $cert->first()->asSequence()->getFirstChildOfType( 3, Element::CLASS_CONTEXTSPECIFIC, Tag::ENVIRONMENT_EXPLICIT ) );
+        if( $extensions )
+        {
+            $crlOctet = CertificateInfo::findExtensionValue('cRLDistributionPoints', $extensions );
+            if ( $crlOctet )
+            {
+                $crlDistributionPoint = asSequence( (new DerDecoder())->decodeElement( $crlOctet ) );
+                if ( $crlDistributionPoint )
+                {
+                    $distributionPoint = asSequence( $crlDistributionPoint->at(1) );
+                    if (  $distributionPoint )
+                    {
+                        $distribution = asRawPrimitive( $distributionPoint->at(1) );
+                        return $distribution->getRawEncodedValue();
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
 }
