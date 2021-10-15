@@ -183,13 +183,26 @@ class Ocsp
     }
 
     /**
-     * Send a request to an OCSP server
+     * Send a request to an OCSP server and return a Response instance
      *
      * @param \lyquidity\Asn1\Element\Sequence $certificate
 	 * @param string $caBundlePath (optional: path to the location of a bundle of trusted CA certificates)
      * @return Response
      */
     static function sendRequest( $certificate, $issuerCertificate = null, $caBundlePath = null )
+    {
+        list( $responseBytes, $response, $signerCerts ) = self::sendRequestRaw( $certificate, $issuerCertificate, $caBundlePath );
+        return $response;
+    }
+
+    /**
+     * Send a request to an OCSP server
+     *
+     * @param \lyquidity\Asn1\Element\Sequence $certificate
+	 * @param string $caBundlePath (optional: path to the location of a bundle of trusted CA certificates)
+     * @return mixed[] An array of the response bytes and Response instance
+     */
+    public static function sendRequestRaw( $certificate, $issuerCertificate = null, $caBundlePath = null )
     {
         list( $certificate, $certificateInfo, $ocspResponderUrl, $issuerCertBytes, $issuerCertificate ) = array_values( Ocsp::getCertificate( $certificate, $issuerCertificate ) );
 
@@ -207,14 +220,18 @@ class Ocsp
 
         // Actually call the OCSP Responder URL (here we use cURL, you can use any library you prefer)
         // For a simple debug option use the address of an OpenSSL 
-        $result = Ocsp::doRequest( $ocspResponderUrl, $requestBody, Ocsp::OCSP_REQUEST_MEDIATYPE, Ocsp::OCSP_RESPONSE_MEDIATYPE, $caBundlePath );
+        $responseBytes = Ocsp::doRequest( $ocspResponderUrl, $requestBody, Ocsp::OCSP_REQUEST_MEDIATYPE, Ocsp::OCSP_RESPONSE_MEDIATYPE, $caBundlePath );
         // $result = file_get_contents('D:\\GitHub\\xml-signer\\ocsp.rsp');
 
-        // $resultB64 = base64_encode( $result );
+        $resultB64 = base64_encode( $responseBytes );
         // Decode the raw response from the OCSP Responder.  It will throw an error if the ASN 
         // is invalid or the signature is not correct.  Otherwise its necessary to check the 
         // decoded response.
-        return $ocsp->decodeOcspResponseSingle( $result, $issuerCertBytes );
+        return array(
+            $responseBytes, 
+            $ocsp->decodeOcspResponseSingle( $responseBytes, $issuerCertBytes ),
+            array_unique( $ocsp->signerCerts )
+        );
     }
 
     /**
@@ -240,7 +257,9 @@ class Ocsp
         else
             $certificate = $certificate = $certificateLoader->fromFile( $path );
 
-        return self::sendRequest( $certificate, $issuerCertificate, $caBundlePath );
+        list( $responseBytes, $response, $signerCerts ) = self::sendRequestRaw( $certificate, $issuerCertificate, $caBundlePath );
+
+        return $response;
     }
 
     /**
@@ -250,7 +269,7 @@ class Ocsp
 	 * @param string $requestBody
 	 * @return string
 	 */
-	static function doRequest( $tsaUrl, $requestBody, $requestType, $responseType, $caBundlePath = null )
+	static function doRequest( $ocspUrl, $requestBody, $requestType, $responseType, $caBundlePath = null )
 	{
         global $certificateBundlePath;
 
@@ -258,14 +277,14 @@ class Ocsp
             $caBundlePath = $certificateBundlePath;
 
 		$hCurl = curl_init( );
-		curl_setopt_array($hCurl, [
-			CURLOPT_URL => $tsaUrl,
+		curl_setopt_array($hCurl, array_filter( array(
+			CURLOPT_URL => $ocspUrl,
 			CURLOPT_RETURNTRANSFER => true,
 			CURLOPT_POST => true,
 			CURLOPT_HTTPHEADER => ['Content-Type: ' . $requestType],
 			CURLOPT_POSTFIELDS => $requestBody,
 			CURLOPT_CAINFO => $caBundlePath,
-		] );
+         ) ) );
 		$result = curl_exec($hCurl);
 
 		$info = curl_getinfo($hCurl);
@@ -599,15 +618,16 @@ class Ocsp
             throw Asn1DecodingException::create();
         }
 
-        $signers = $this->verifySigning( $basicOCSPResponse, $signer, $this->derEncoder->encodeElement( $tbsResponseData ) );
-        if ( $signer && ! $signers )
+        // Record the signing certificates so the caller can access them
+        $this->signerCerts = $this->verifySigning( $basicOCSPResponse, $signer, $this->derEncoder->encodeElement( $tbsResponseData ) );
+        if ( $signer && ! $this->signerCerts )
         {
             throw new Exception\VerificationException( 'The response is signed but the signature cannot be verified' );
         }
 
-        if ( $signers )
+        if ( $this->signerCerts )
         {
-            foreach( $signers as $signerDER )
+            foreach( $this->signerCerts as $signerDER )
             {
                 // Create a Sequence for the certificate
                 $signerCertificate = (new DerDecoder())->decodeElement( $signerDER );
@@ -761,6 +781,8 @@ class Ocsp
 		}
 		return $signers;
     }
+
+    public $signerCerts = array();
 
     /**
      * Access any certificates provided
