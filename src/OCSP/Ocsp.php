@@ -23,6 +23,7 @@ use lyquidity\Asn1\UniversalTagID;
 use lyquidity\OCSP\Exception\ResponseException\MissingResponseBytesException;
 use lyquidity\Asn1\Exception\Asn1DecodingException;
 use lyquidity\OCSP\Exception\ResponseException;
+use lyquidity\OCSP\Exception\VerificationException;
 
 use function lyquidity\Asn1\asObjectIdentifier;
 use function lyquidity\Asn1\asOctetString;
@@ -199,6 +200,7 @@ class Ocsp
      * Send a request to an OCSP server
      *
      * @param \lyquidity\Asn1\Element\Sequence $certificate
+     * @param \lyquidity\Asn1\Element\Sequence $issuerCertificate
 	 * @param string $caBundlePath (optional: path to the location of a bundle of trusted CA certificates)
      * @return mixed[] An array of the response bytes and Response instance
      */
@@ -224,12 +226,23 @@ class Ocsp
         // $result = file_get_contents('D:\\GitHub\\xml-signer\\ocsp.rsp');
 
         $resultB64 = base64_encode( $responseBytes );
+        $response = null;
+        try
+        {
+            $response = $ocsp->decodeOcspResponseSingle( $responseBytes, $issuerCertBytes );
+        }
+        catch( VerificationException $ex )
+        {
+            error_log( $resultB64 );
+            throw $ex;
+        }
+
         // Decode the raw response from the OCSP Responder.  It will throw an error if the ASN 
         // is invalid or the signature is not correct.  Otherwise its necessary to check the 
         // decoded response.
         return array(
-            $responseBytes, 
-            $ocsp->decodeOcspResponseSingle( $responseBytes, $issuerCertBytes ),
+            $responseBytes,
+            $response,
             array_unique( $ocsp->signerCerts )
         );
     }

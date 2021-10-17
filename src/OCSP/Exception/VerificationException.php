@@ -10,6 +10,6 @@ namespace lyquidity\OCSP\Exception;
 /**
  * Exception thrown when the response is signed but the OCSP signature cannot be verified.
  */
-abstract class VerificationException extends Exception
+class VerificationException extends Exception
 {
 }
