@@ -219,6 +219,8 @@ use lyquidity\Asn1\Element\Integer;
 use lyquidity\Asn1\Element\NullElement;
 use lyquidity\Asn1\Element\ObjectIdentifier;
 use lyquidity\Asn1\Element\OctetString;
+use lyquidity\Asn1\Element\RawConstructed;
+use lyquidity\Asn1\Element\RawPrimitive;
 use lyquidity\Asn1\Element\Sequence;
 use lyquidity\Asn1\Element\Set;
 use lyquidity\Asn1\Exception\Asn1DecodingException;
@@ -226,6 +228,7 @@ use lyquidity\Asn1\Tag;
 use lyquidity\Asn1\UniversalTagID;
 use lyquidity\OCSP\CertificateInfo;
 use lyquidity\OCSP\Ocsp;
+use lyquidity\OID\OID;
 
 use function lyquidity\Asn1\asBitString;
 use function lyquidity\Asn1\asGeneralizedTime;
@@ -233,6 +236,7 @@ use function lyquidity\Asn1\asInteger;
 use function lyquidity\Asn1\asObjectIdentifier;
 use function lyquidity\Asn1\asOctetString;
 use function lyquidity\Asn1\asRawConstructed;
+use function lyquidity\Asn1\asRawPrimitive;
 use function lyquidity\Asn1\asSequence;
 use function lyquidity\Asn1\asSet;
 use function lyquidity\Asn1\asUTF8String;
@@ -432,7 +436,12 @@ class TSA
 		}
 
 		// Inflate the string to retrieve the decoded content
-		$tstInfoRaw = asOctetString( $tst->getFirstChildOfType( 0, Element::CLASS_CONTEXTSPECIFIC, Tag::ENVIRONMENT_EXPLICIT ) );
+		$octet = $tst->getFirstChildOfType( 0,  Element::CLASS_CONTEXTSPECIFIC,  Tag::ENVIRONMENT_EXPLICIT );
+		if ( $octet instanceof RawConstructed )
+		{
+			$octet = asRawConstructed( $octet )->at(1);
+		}
+		$tstInfoRaw =  asOctetString( $octet );
 		if ( ! $tstInfoRaw )
 		{
 			throw new TSAException('Expect TST info octet string');
@@ -620,11 +629,30 @@ class TSA
 		if ( ! $signedData ) return null;
 
 		// Get the certificates 
-		$certificates = \lyquidity\Asn1\asRawConstructed( $signedData-> getNthUntaggedChild( 1, \lyquidity\Asn1\Element::CLASS_CONTEXTSPECIFIC, 0 ) );
+		$certificates = \lyquidity\Asn1\asRawConstructed( $signedData->getNthUntaggedChild( 1, \lyquidity\Asn1\Element::CLASS_CONTEXTSPECIFIC, 0 ) );
 		if ( ! $certificates ) return null;
 
 		// It will be the second certificate if it exists
 		return asSequence( $certificates->at(2) );
+	}
+
+
+	/**
+	 * Get the issuer certificate if there is one
+	 *
+	 * @param Sequence $signedData
+	 * @return Sequence
+	 */
+	static function getSubjectCertificate( $signedData )
+	{
+		if ( ! $signedData ) return null;
+
+		// Get the certificates 
+		$certificates = \lyquidity\Asn1\asRawConstructed( $signedData->getNthUntaggedChild( 1, \lyquidity\Asn1\Element::CLASS_CONTEXTSPECIFIC, 0 ) );
+		if ( ! $certificates ) return null;
+
+		// It will be the second certificate if it exists
+		return asSequence( $certificates->at(1) );
 	}
 
 	/**
@@ -785,7 +813,7 @@ class TSA
 	/**
 	 * Return the DateTime instance from the timestamp token returned by a TSA
 	 * @param string $timestampDERBase64 Base 64 encoded DER string of the TST
-	 * @return DateTime 
+	 * @return Sequence 
 	 * @throws Asn1DecodingException 
 	 * @throws TSAException 
 	 */
@@ -793,6 +821,94 @@ class TSA
 	{
 		$timestampDER = base64_decode( $timestampDERBase64 );
 		return self::getDateFromTSTDER( $timestampDER );
+	}
+
+	/**
+	 * Return the certificate from the timestamp token used by a TSA
+	 * @param string $timestampDERBase64 Base 64 encoded DER string of the TST
+	 * @return Sequence 
+	 * @throws Asn1DecodingException 
+	 * @throws TSAException 
+	 */
+	public static function getIssuerCertificateFromDERBase64( $timestampDERBase64 )
+	{
+		$timestampDER = base64_decode( $timestampDERBase64 );
+		return self::getIssuerCertificateFromTSTDER( $timestampDER );
+	}
+
+	/**
+	 * Return the issuer certificate from the timestamp token use by a TSA
+	 * @param string $timestampDER DER encode string of the TST
+	 * @return Sequence 
+	 * @throws Asn1DecodingException 
+	 * @throws TSAException 
+	 */
+	public static function getIssuerCertificateFromTSTDER( $timestampDER )
+	{
+		// Inflate the DER
+		$decode = new Decoder();
+		$timestampToken = $decode->decodeElement( $timestampDER );
+		$timestampToken = asSequence( $timestampToken ); // This line is a kludge.  PHP does not resolve functions automatically but it will be available after the call to decodeElement()
+		if ( ! $timestampToken )
+			throw new TSAException("Oops! Not valid timestamp token");
+
+		$signedData_OID = OID::getOIDFromName('id-signedData');
+		$OID = asObjectIdentifier( $timestampToken->getFirstChildOfType( UniversalTagID::OBJECT_IDENTIFIER ) );
+		if ( $signedData_OID != $OID->getIdentifier() )
+		{
+			throw new TSAException("The OID should be id_signedData ");
+		}
+
+		// Get the signed data
+		$signedData = asSequence( $timestampToken->getNthChildOfType( 1, 0, Element::CLASS_CONTEXTSPECIFIC, Tag::ENVIRONMENT_EXPLICIT ) );
+		if ( ! $signedData )
+			throw new TSAException("Oops! Not valid signed data");
+
+		return self::getIssuerCertificate( $signedData );
+	}
+
+	/**
+	 * Return the subject certificate from the timestamp token used by a TSA
+	 * @param string $timestampDERBase64 Base 64 encoded DER string of the TST
+	 * @return Sequence 
+	 * @throws Asn1DecodingException 
+	 * @throws TSAException 
+	 */
+	public static function getSubjectCertificateFromDERBase64( $timestampDERBase64 )
+	{
+		$timestampDER = base64_decode( $timestampDERBase64 );
+		return self::getSubjectCertificateFromTSTDER( $timestampDER );
+	}
+
+	/**
+	 * Return the subect certificate from the timestamp token used by a TSA
+	 * @param string $timestampDER DER encode string of the TST
+	 * @return Sequence 
+	 * @throws Asn1DecodingException 
+	 * @throws TSAException 
+	 */
+	public static function getSubjectCertificateFromTSTDER( $timestampDER )
+	{
+		// Inflate the DER
+		$decode = new Decoder();
+		$timestampToken = $decode->decodeElement( $timestampDER );
+		$timestampToken = asSequence( $timestampToken ); // This line is a kludge.  PHP does not resolve functions automatically but it will be available after the call to decodeElement()
+		if ( ! $timestampToken )
+			throw new TSAException("Oops! Not valid timestamp token");
+
+		$signedData_OID = OID::getOIDFromName('id-signedData');
+		$OID = asObjectIdentifier( $timestampToken->getFirstChildOfType( UniversalTagID::OBJECT_IDENTIFIER ) );
+		if ( $signedData_OID != $OID->getIdentifier() )
+		{
+			throw new TSAException("The OID should be id_signedData ");
+		}
+
+		// Get the signed data
+		$signedData = asSequence( $timestampToken->getNthChildOfType( 1, 0, Element::CLASS_CONTEXTSPECIFIC, Tag::ENVIRONMENT_EXPLICIT ) );
+		if ( ! $signedData )
+			throw new TSAException("Oops! Not valid signed data");
+
+		return self::getSubjectCertificate( $signedData );
 	}
 
 	/**
@@ -811,6 +927,12 @@ class TSA
 		if ( ! $timestampToken )
 			throw new TSAException("Oops! Not valid timestamp token");
 
+		$signedData_OID = OID::getOIDFromName('id-signedData');
+		$OID = asObjectIdentifier( $timestampToken->getFirstChildOfType( UniversalTagID::OBJECT_IDENTIFIER ) );
+		if ( $signedData_OID != $OID->getIdentifier() )
+		{
+			throw new TSAException("The OID should be id_signedData ");
+		}
 		// Get the signed data
 		$signedData = asSequence( $timestampToken->getNthChildOfType( 1, 0, Element::CLASS_CONTEXTSPECIFIC, Tag::ENVIRONMENT_EXPLICIT ) );
 		if ( ! $signedData )
@@ -820,7 +942,12 @@ class TSA
 		$tst = asSequence( $signedData->getFirstChildOfType( UniversalTagID::SEQUENCE ) );
 
 		// Inflate the string to retrieve the decoded content
-		$tstInfoRaw =  asOctetString( $tst->getFirstChildOfType( 0,  Element::CLASS_CONTEXTSPECIFIC,  Tag::ENVIRONMENT_EXPLICIT ) );
+		$octet = $tst->getFirstChildOfType( 0,  Element::CLASS_CONTEXTSPECIFIC,  Tag::ENVIRONMENT_EXPLICIT );
+		if ( $octet instanceof RawConstructed )
+		{
+			$octet = asRawConstructed( $octet )->at(1);
+		}
+		$tstInfoRaw =  asOctetString( $octet );
 		if ( ! $tstInfoRaw )
 		{
 			throw new TSAException('Expect TST info octet string');
