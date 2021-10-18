@@ -212,6 +212,10 @@ class Ocsp
         /** @var Sequence $certificate */
         /** @var Sequence $issuerCertificate */
 
+        // Without an issuer certificate instance extractRequestInfo will throw an exception
+        if( ! $issuerCertificate )
+            $issuerCertificate = $certificate;
+
         // Extract the relevant data from the two certificates
         $requestInfo = $certificateInfo->extractRequestInfo( $certificate, $issuerCertificate );
 
@@ -233,8 +237,8 @@ class Ocsp
         }
         catch( VerificationException $ex )
         {
-            // error_log( $resultB64 );
-            // error_log( $ex );
+            error_log( $resultB64 );
+            error_log( $ex );
             throw $ex;
         }
 
