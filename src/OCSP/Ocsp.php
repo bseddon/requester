@@ -233,7 +233,8 @@ class Ocsp
         }
         catch( VerificationException $ex )
         {
-            error_log( $resultB64 );
+            // error_log( $resultB64 );
+            // error_log( $ex );
             throw $ex;
         }
 
@@ -727,7 +728,7 @@ class Ocsp
         $pem_data = substr( $pem_data, 0, strpos( $pem_data, $end ) );
         $der = base64_decode($pem_data);
         return $der;
-     }
+    }
 
 	/**
 	 * Verifies the content of $data can be signed by $cert to produce $signature
