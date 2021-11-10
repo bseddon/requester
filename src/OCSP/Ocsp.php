@@ -133,7 +133,7 @@ class Ocsp
      * @param Sequence $subjectCertificate
      * @param Sequence $issuerCertificate If the issuer certificate is not provided it will be retrieve on the path found in the subject certificate
      * @return bool
-     * @throws ResponseException If there is a problem validating the certificate
+     * @throws VerificationException If there is a problem validating the certificate
      */
     static function validateCertificate( Sequence $subjectCertificate, Sequence $issuerCertificate = null )
     {
@@ -147,22 +147,22 @@ class Ocsp
         {
             $issuerUrl = $certificateInfo->extractIssuerCertificateUrl( $subjectCertificate );
             if ( ! $issuerUrl )
-                throw new ResponseException('The issuer certificate has not been provided and a url to the certificate is not in the subject certificate');
+                throw new VerificationException('The issuer certificate has not been provided and a url to the certificate is not in the subject certificate');
 
             if ( ! openssl_x509_export( file_get_contents( $issuerUrl ), $issuerCertificate ) )
-                throw new ResponseException( sprintf( 'Unable to access the issuer certificate at the supplied location: \'%s\'', $issuerUrl ) );
+                throw new VerificationException( sprintf( 'Unable to access the issuer certificate at the supplied location: \'%s\'', $issuerUrl ) );
             // $issuerCertificate = self::PEMize( self::pem2der( file_get_contents( $issuerUrl ) ) );
         }
 
         // Get the subject's signature
         $signatureBytes = $certificateInfo->getSignatureBytes( $subjectCertificate );
         if ( ! $signatureBytes )
-            throw new ResponseException('Unable to retrieve the encrypted signature from the subject certificate');
+            throw new VerificationException('Unable to retrieve the encrypted signature from the subject certificate');
         
         // The issuer's public key is needed to decode the subject signature
         $issuerPublicKey = openssl_pkey_get_public( $issuerCertificate );
         if ( openssl_public_decrypt( $signatureBytes, $decryptedSignature, $issuerPublicKey ) === false )
-            throw new ResponseException('Unable to decrypt the subject signature using the issuer public key');
+            throw new VerificationException('Unable to decrypt the subject signature using the issuer public key');
 
         // Being able to decrypt the signature is probably good enough proof but confirming the hashes are the same makes sure the signer certificate is unchanged
 
@@ -178,7 +178,7 @@ class Ocsp
         $tbs = (new DerEncoder())->encodeElement( $subjectCertificate->at(1) );
         // And compare it with the one in the signature
         if ( bin2hex( $signatureHash->getValue() ) != hash( $hashName, $tbs ) )
-            throw new ResponseException('The signature hash and and the hash of the TBS are not the same');
+            throw new VerificationException('The signature hash and and the hash of the TBS are not the same');
      
         return true;
     }
@@ -425,7 +425,7 @@ class Ocsp
      * @param string $signer The certificate used to sign the parts of the response (the issuer certificate)
      *
      * @throws Exception\Asn1DecodingException if $rawBody is not a valid response from the OCSP responder
-     * @throws Exception\ResponseException:: if the request was not successfull
+     * @throws Exception\ResponseException\MultipleResponsesException if the request was not successfull
      *
      * @return Response
      *
@@ -448,7 +448,7 @@ class Ocsp
      * @param string $signer The certificate used to sign the parts of the response (the issuer certificate)
      *
      * @throws Exception\Asn1DecodingException if $rawBody is not a valid response from the OCSP responder
-     * @throws Exception\ResponseException:: if the request was not successfull
+     * @throws Exception\ResponseException\MissingResponseBytesException if the request was not successfull
      *
      * @return ResponseList
      *
@@ -478,7 +478,7 @@ class Ocsp
      *
      * @param \lyquidity\Asn1\Element\Sequence $ocspResponse
      *
-     * @throws Exception\ResponseException:: if the request was not successfull
+     * @throws Exception\ResponseException\MalformedRequestException if the request was not successfull
      * @throws Exception\Asn1DecodingException if the response contains invalid data
      *
      * @see https://tools.ietf.org/html/rfc6960#section-4.2.1
@@ -515,7 +515,7 @@ class Ocsp
      * @param string $signer The certificate used to sign the parts of the response (the issuer certificate)
      *
      * @throws Exception\Asn1DecodingException
-     * @throws Exception\ResponseException
+     * @throws Exception\ResponseException\MissingResponseBytesException
      *
      * @see https://tools.ietf.org/html/rfc6960#section-4.2.1
      */
@@ -535,7 +535,7 @@ class Ocsp
             }
         }
 
-        throw ResponseException\MissingResponseBytesException::create();
+        throw Exception\ResponseException\MissingResponseBytesException::create();
     }
 
     /**
@@ -640,7 +640,7 @@ class Ocsp
         $this->signerCerts = $this->verifySigning( $basicOCSPResponse, $signer, $this->derEncoder->encodeElement( $tbsResponseData ) );
         if ( $signer && ! $this->signerCerts )
         {
-            throw new Exception\VerificationException( 'The response is signed but the signature cannot be verified' );
+            throw new VerificationException( 'The response is signed but the signature cannot be verified' );
         }
 
         if ( $this->signerCerts )
@@ -658,17 +658,17 @@ class Ocsp
                 /** @var \lyquidity\Asn1\Element\Sequence $issuerCertificate */
                 if ( ! $issuerCertificate )
                 {
-                    throw new ResponseException("An issuer certificate cannot be found for the certificate used to sign the OCSP response");
+                    throw new VerificationException("An issuer certificate cannot be found for the certificate used to sign the OCSP response");
                 }
 
                 try
                 {
                     if ( ! $this->validateCertificate( $signerCertificate, $issuerCertificate ) )
                     {
-                        throw new ResponseException("Failed to validate the certificate that signed the OCSP response");
+                        throw new VerificationException("Failed to validate the certificate that signed the OCSP response");
                     }
                 }
-                catch( ResponseException $ex )
+                catch( VerificationException $ex )
                 {
                     throw $ex;
                 }
@@ -774,7 +774,7 @@ class Ocsp
 		$hashAlg = self::OID2Name[ $ha ];
 		if ( ! isset( $hashAlg ) )
 		{
-			throw new ResponseException("Unsupported signature algorithm $ha");
+			throw new VerificationException("Unsupported signature algorithm $ha");
 		}
 
 		$certs = self::getSignerCerts( $sequence );
@@ -856,7 +856,6 @@ class Ocsp
      * @param \lyquidity\Asn1\Element\Sequence $singleResponse
      *
      * @throws Exception\Asn1DecodingException
-     * @throws Exception\ResponseException
      *
      * @return Response
      *
