@@ -134,6 +134,14 @@ class BigInteger
     }
 
     /**
+     * Get the number as a base 10 integer string.
+     */
+    public function hex(): string
+    {
+		return \gmp_strval($this->_gmp, 16);
+    }
+
+    /**
      * Get the number as an integer.
      *
      * @throws \RuntimeException If number overflows integer size
