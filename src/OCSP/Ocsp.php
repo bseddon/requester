@@ -109,7 +109,14 @@ class Ocsp
                 : CertificateLoader::ensureDer( $issuerCertificate )
               )
             : ( $urlOfIssuerCertificate 
-                ? file_get_contents( $urlOfIssuerCertificate )
+                ? file_get_contents( $urlOfIssuerCertificate, false, stream_context_create( array(
+																									"ssl"=>array(
+																										"verify_peer"=>false,
+																										"verify_peer_name"=>false,
+																									),
+																								 )
+																						  )
+				  )
                 : ''
               );
         $issuerBytes = CertificateLoader::ensureDer( $issuerBytes );
