@@ -303,7 +303,7 @@ class Encoder implements EncoderInterface
     protected function encodeLength($encodedElementValue)
     {
         $length = strlen($encodedElementValue);
-        if ($length < 127) {
+        if ($length < 128) {
             return chr($length);
         }
         $lengthHex = dechex($length);
