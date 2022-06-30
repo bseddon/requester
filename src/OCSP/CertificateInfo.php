@@ -323,12 +323,7 @@ class CertificateInfo
     public function extractSubjectPublicKeyBytes(Sequence $certificate)
     {
         /** @var Sequence */
-        $tbsCertificate = $certificate->getFirstChildOfType(UniversalTagID::SEQUENCE);
-        if ($tbsCertificate === null) {
-            return '';
-        }
-        /** @var Sequence */
-        $subjectPublicKeyInfo = $tbsCertificate->getNthChildOfType(5, UniversalTagID::SEQUENCE);
+        $subjectPublicKeyInfo = self::extractSubjectPublicKeyInfo( $certificate );
         if ($subjectPublicKeyInfo === null) {
             return '';
         }
@@ -341,7 +336,25 @@ class CertificateInfo
         return $subjectPublicKey->getBytes();
     }
 
-    /**
+     /**
+     * Extract the public key info of the subject included in the certificate.
+     *
+     * @param \lyquidity\Asn1\Element\Sequence $certificate
+     *
+     * @return Sequence Null if not found
+     */
+    public function extractSubjectPublicKeyInfo(Sequence $certificate)
+    {
+        /** @var Sequence */
+        $tbsCertificate = $certificate->getFirstChildOfType(UniversalTagID::SEQUENCE);
+        if ($tbsCertificate === null) {
+            return '';
+        }
+        /** @var Sequence */
+        return $tbsCertificate->getNthChildOfType(5, UniversalTagID::SEQUENCE);
+    }
+
+   /**
      * Extract the bytes of the public key of the subject included in the certificate.
      *
      * @param \lyquidity\Asn1\Element\Sequence $certificate
