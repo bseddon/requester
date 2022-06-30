@@ -112,7 +112,7 @@ class OID
 					case OPENSSL_ALGO_SHA1:
 						return self::getOIDFromName('ecdsa-with-SHA1');
 					default:
-						return false;
+						return self::getOIDFromName( $digest );
 				}
 			case OPENSSL_KEYTYPE_DSA:
 				switch($digest) {
@@ -195,6 +195,8 @@ class OID
 		"1.2.840.113549.1.9.5" => "id-signingTime", // From IETF RFC 5652.
 
 		//ec
+		"1.2.840.10045" => "x962",
+		"1.2.840.10045.2.1" => "ecPublicKey",
 		"1.2.840.10045.4.1" => "ecdsa-with-SHA1",
 		"1.2.840.10045.4.3.2" => "ecdsa-with-sha256",
 		"1.2.840.10045.4.3.3" => "ecdsa-with-sha384",
@@ -265,7 +267,10 @@ class OID
 		"2.5.29.20" => "cRLNumber",
 		"2.5.29.21" => "cRLReason",
 		"2.5.29.23" => "instructionCode",
-		"2.5.29.24" => "invalidityDate",			
+		"2.5.29.24" => "invalidityDate",
+		
+		// EC curves
+		"1.2.840.10045.3.1.7" => "prime256v1",
 	);
 	
 	// algorithms hash

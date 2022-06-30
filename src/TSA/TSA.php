@@ -227,6 +227,7 @@ use lyquidity\Asn1\Exception\Asn1DecodingException;
 use lyquidity\Asn1\Tag;
 use lyquidity\Asn1\UniversalTagID;
 use lyquidity\OCSP\CertificateInfo;
+use lyquidity\OCSP\CertificateLoader;
 use lyquidity\OCSP\Ocsp;
 use lyquidity\OID\OID;
 
@@ -490,6 +491,28 @@ class TSA
 
 		// Find the issuer cerificiate in the response
 		$issuerCertificate = self::getIssuerCertificate( $signedData );
+		if ( ! $issuerCertificate )
+		{
+			$issuerUrl = $certificateInfo->extractIssuerCertificateUrl( $certificate );
+
+			$loader = new CertificateLoader();
+			try
+			{
+				$pem = \file_get_contents( $issuerUrl );
+				$issuerCertificate = $loader->fromString( $pem );
+			}
+			catch( \Exception $ex )
+			{
+				// throw new TSAException('Unable to find an issuer certificate or a url to its source');
+				return false;
+			}
+			finally
+			{
+				unset( $loader );
+				unset( $issuerUrl );
+				unset( $pem );
+			}
+		}
 
 		// The dates on the issuer certificate must be valid
 		$dates = $certificateInfo->extractDates( $issuerCertificate );
@@ -568,8 +591,16 @@ class TSA
 		if ( ! $signedData || ! $signerInfo ) return null;
 
 		// Get the certificates 
-		$certificates = \lyquidity\Asn1\asRawConstructed( $signedData-> getNthUntaggedChild( 1, \lyquidity\Asn1\Element::CLASS_CONTEXTSPECIFIC, 0 ) );
-		if ( ! $certificates ) return null;
+		$certificates = \lyquidity\Asn1\asRawConstructed( $signedData->getNthUntaggedChild( 1, \lyquidity\Asn1\Element::CLASS_CONTEXTSPECIFIC, 0 ) );
+		if ( ! $certificates ) 
+		{
+			// If there is only one, it could be in-line
+			$certificate = $signedData->getNthChildOfType( 1, 0, Element::CLASS_CONTEXTSPECIFIC, \lyquidity\Asn1\Tag::ENVIRONMENT_EXPLICIT );
+			if ( ! $certificate ) return null;
+			/** @var Sequence $certificate */
+			$certificate->setTag(null); // The single certificate may have been part of an explicit array so just in case...
+			$certificates = (new Sequence())->create( array( $certificate ) );
+		}
 
 		// The version indicates what type of certificate identifier is being used: 1 is subject info and serial number; 2 is subjectKeyId
 		$version = \lyquidity\Asn1\asInteger( $signerInfo->at(1) )->getValue();

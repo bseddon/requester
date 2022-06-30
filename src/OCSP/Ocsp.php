@@ -24,6 +24,7 @@ use lyquidity\OCSP\Exception\ResponseException\MissingResponseBytesException;
 use lyquidity\Asn1\Exception\Asn1DecodingException;
 use lyquidity\OCSP\Exception\ResponseException;
 use lyquidity\OCSP\Exception\VerificationException;
+use lyquidity\OID\OID;
 
 use function lyquidity\Asn1\asObjectIdentifier;
 use function lyquidity\Asn1\asOctetString;
@@ -67,7 +68,13 @@ class Ocsp
         '1.3.14.3.2.26' => 'SHA1',
         '1.2.840.113549.2.5' => 'MD5',
         /* DN components */
-        '1.2.840.113549.1.9.1' => 'emailAddress'
+        '1.2.840.113549.1.9.1' => 'emailAddress',
+		/* EC */
+		"1.2.840.10045.4.1" => "ecdsa-with-SHA1",
+		"1.2.840.10045.4.3.1" => 'SHA224',
+		"1.2.840.10045.4.3.2" => 'SHA256',
+		"1.2.840.10045.4.3.3" => 'SHA384',
+		"1.2.840.10045.4.3.4" => 'SHA512'
     );
 
     const id_pkix_ocsp_basic = '1.3.6.1.5.5.7.48.1.1';
@@ -148,7 +155,7 @@ class Ocsp
         if ( $issuerCertificate )
         {
             // Convert the Sequence to a PEM so the OpenSSL function will use it
-            $issuerCertificate = self::PEMize( (new DerEncoder())->encodeElement( $issuerCertificate) );
+            $issuerCertificatePem = self::PEMize( (new DerEncoder())->encodeElement( $issuerCertificate) );
         }
         else
         {
@@ -156,7 +163,7 @@ class Ocsp
             if ( ! $issuerUrl )
                 throw new VerificationException('The issuer certificate has not been provided and a url to the certificate is not in the subject certificate');
 
-            if ( ! openssl_x509_export( file_get_contents( $issuerUrl ), $issuerCertificate ) )
+            if ( ! openssl_x509_export( file_get_contents( $issuerUrl ), $issuerCertificatePem ) )
                 throw new VerificationException( sprintf( 'Unable to access the issuer certificate at the supplied location: \'%s\'', $issuerUrl ) );
             // $issuerCertificate = self::PEMize( self::pem2der( file_get_contents( $issuerUrl ) ) );
         }
@@ -165,18 +172,45 @@ class Ocsp
         $signatureBytes = $certificateInfo->getSignatureBytes( $subjectCertificate );
         if ( ! $signatureBytes )
             throw new VerificationException('Unable to retrieve the encrypted signature from the subject certificate');
-        
+
+		// Make sure the algorithm used by by the issuer is supported
+		$oid = asObjectIdentifier( $issuerCertificate->at(2)->asSequence()->at(1) );
+		$oid = $oid->getIdentifier();
+
+		// Check the OID is supported by PHP OpenSSL
+		if ( $oid != \lyquidity\OID\OID::getOIDFromName('ecdsa-with-SHA1') && 
+			 strpos( $oid, \lyquidity\OID\OID::getAlgoOID( OPENSSL_KEYTYPE_EC, 'x962' ) ) === 0 ) // 'x962' is the EC specification
+		{
+			// If an elliptic curve algorithm has been used then the signature is just the signature for the certificate TBS (to-be-signed)
+			// (first) element of the subject certificate.  If the algorithm is RSA then the signature is an encrypted hash of the TBS.
+
+			// Its most reliable to get the public key from a PEM encoded certificate
+			$pem = self::PEMize( (new DerEncoder())->encodeElement( $issuerCertificate ) );
+			$signature = $certificateInfo->getSignatureBytes( $subjectCertificate );
+			$tbsSeq = $subjectCertificate->at(1)->asSequence();
+			$tbs = (new DerEncoder())->encodeElement( $tbsSeq );
+			$hashName = Ocsp::OID2Name[ $oid ] ?? null;
+			
+			if ( openssl_verify( $tbs, $signature, $pem, $hashName ) )
+			{
+				return true;
+			}
+			echo "Warning: The issuer certificate uses a key type (OID: $oid) that is not supported\n";
+			// Assume it is OK but return false not an exception
+			return false;
+		}
+
         // The issuer's public key is needed to decode the subject signature
-        $issuerPublicKey = openssl_pkey_get_public( $issuerCertificate );
+        $issuerPublicKey = openssl_pkey_get_public( $issuerCertificatePem );
         if ( openssl_public_decrypt( $signatureBytes, $decryptedSignature, $issuerPublicKey ) === false )
-            throw new VerificationException('Unable to decrypt the subject signature using the issuer public key');
+        	throw new VerificationException('Unable to decrypt the subject signature using the issuer public key');
 
         // Being able to decrypt the signature is probably good enough proof but confirming the hashes are the same makes sure the signer certificate is unchanged
 
         // Access the algorithm and TBS hash from the decoded signature
         $signature = asSequence( (new DerDecoder())->decodeElement( $decryptedSignature ) );
         $hashOID = asObjectIdentifier( $signature->at(1)->asSequence()->at(1) );
-        $hashName = Ocsp::OID2Name[ $hashOID->getIdentifier() ];
+        $hashName = Ocsp::OID2Name[ $hashOID->getIdentifier() ] ?? null;
 
         // The hash computed by the issuer is in the signature
         $signatureHash = asOctetString( $signature->at(2) );
@@ -778,10 +812,10 @@ class Ocsp
 		$signers = array();
 
 		$ha = self::getSignatureAlgorithm( $sequence );
-		$hashAlg = self::OID2Name[ $ha ];
+		$hashAlg = self::OID2Name[ $ha ] ?? null;
 		if ( ! isset( $hashAlg ) )
 		{
-			throw new VerificationException("Unsupported signature algorithm $ha");
+			throw new VerificationException("Unsupported signature hash algorithm $ha");
 		}
 
 		$certs = self::getSignerCerts( $sequence );
@@ -794,7 +828,7 @@ class Ocsp
         // If there are no certificates there can be no valid verification
         // This is not an error.  If the responder did not include a certificate and
         // the caller did not supply the responder's then no verification is possible.
-        $info = new CertificateInfo();
+		$info = new CertificateInfo();
 
 		foreach( $certs as $cert )
 		{
