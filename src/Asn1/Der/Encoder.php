@@ -296,13 +296,13 @@ class Encoder implements EncoderInterface
     /**
      * Encode the length of the encoded value of an element.
      *
-     * @param string $encodedElementValue the encoded value of an element
+     * @param ?string $encodedElementValue the encoded value of an element
      *
      * @return string
      */
     protected function encodeLength($encodedElementValue)
     {
-        $length = strlen($encodedElementValue);
+        $length = $encodedElementValue === null ? 0 : strlen($encodedElementValue);
         if ($length < 128) {
             return chr($length);
         }
